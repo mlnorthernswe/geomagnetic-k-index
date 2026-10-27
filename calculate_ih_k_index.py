@@ -19,9 +19,9 @@ import math
 import statistics
 import struct
 import sys
-from datetime import datetime
+from datetime import date, datetime
 from pathlib import Path
-from typing import TextIO
+from typing import Iterator, TextIO
 
 
 WORDS_PER_RECORD = 5888
@@ -61,9 +61,10 @@ def read_sq_curve(path: Path) -> dict[str, tuple[float, ...]]:
     }
 
 
-def interpolate_sq_pt(hourly_values: tuple[float, ...], minute_of_day: int) -> float:
-    hour, minute = divmod(minute_of_day, 60)
-    fraction = minute / 60.0
+def interpolate_sq_pt(hourly_values: tuple[float, ...], second_of_day: float) -> float:
+    hour = int(second_of_day // 3600)
+    second = second_of_day - hour * 3600
+    fraction = second / 3600.0
     next_hour = (hour + 1) % 24
     return hourly_values[hour] + fraction * (hourly_values[next_hour] - hourly_values[hour])
 
@@ -156,7 +157,7 @@ def calculate_day(
                 if raw_value == MISSING_VALUE:
                     continue
                 observed_pt = raw_value * 100.0  # IAF component words are in 0.1 nT.
-                quiet_pt = interpolate_sq_pt(sq[component], minute_of_day)
+                quiet_pt = interpolate_sq_pt(sq[component], minute_of_day * 60)
                 values_pt.append(observed_pt - quiet_pt)
 
             coverage[component] = len(values_pt) / (end_minute - start_minute)
@@ -196,6 +197,123 @@ def calculate_day(
             }
         )
 
+    return rows
+
+
+def iter_iaga_days(
+    path: Path,
+) -> Iterator[tuple[date, list[tuple[float, float | None, float | None]]]]:
+    component_columns: dict[str, int] | None = None
+    current_day: date | None = None
+    day_samples: list[tuple[float, float | None, float | None]] = []
+    previous_timestamp: datetime | None = None
+
+    with path.open(encoding="ascii") as source:
+        for line_number, line in enumerate(source, 1):
+            fields = line.replace("|", " ").split()
+            if not fields:
+                continue
+            if fields[0].upper() == "DATE" and len(fields) >= 3 and fields[2].upper() == "DOY":
+                component_columns = {
+                    component: index
+                    for index, field in enumerate(fields[3:], 3)
+                    for component in ("x", "y")
+                    if field.upper().endswith(component.upper())
+                }
+                if set(component_columns) != {"x", "y"}:
+                    raise ValueError(f"{path}:{line_number}: IAGA header must contain X and Y columns")
+                continue
+            if not fields[0][0:1].isdigit() or len(fields[0]) != 10 or fields[0][4] != "-":
+                continue
+            if component_columns is None:
+                raise ValueError(f"{path}:{line_number}: IAGA data encountered before the DATE/TIME/DOY header")
+            try:
+                timestamp = datetime.fromisoformat(f"{fields[0]}T{fields[1]}")
+                values = []
+                for component in ("x", "y"):
+                    value = float(fields[component_columns[component]])
+                    values.append(None if not math.isfinite(value) or abs(value) in (99999, 999999) else value)
+            except (IndexError, ValueError) as error:
+                raise ValueError(f"{path}:{line_number}: invalid IAGA timestamp or component value") from error
+
+            if previous_timestamp is not None and timestamp <= previous_timestamp:
+                raise ValueError(f"{path}:{line_number}: IAGA timestamps must be strictly increasing")
+            previous_timestamp = timestamp
+            sample_day = timestamp.date()
+            if current_day is not None and sample_day != current_day:
+                if sample_day < current_day:
+                    raise ValueError(f"{path}:{line_number}: IAGA dates must be in chronological order")
+                yield current_day, day_samples
+                day_samples = []
+            current_day = sample_day
+            seconds_of_day = (
+                timestamp.hour * 3600
+                + timestamp.minute * 60
+                + timestamp.second
+                + timestamp.microsecond / 1_000_000
+            )
+            day_samples.append((seconds_of_day, values[0], values[1]))
+
+    if component_columns is None:
+        raise ValueError(f"{path}: missing IAGA DATE/TIME/DOY header with X and Y columns")
+    if current_day is None:
+        raise ValueError(f"{path}: no IAGA data rows found")
+    yield current_day, day_samples
+
+
+def calculate_iaga_day(
+    day: date,
+    samples: list[tuple[float, float | None, float | None]],
+    sq: dict[str, tuple[float, ...]],
+    minimum_coverage: float,
+    k9_nT: float,
+) -> list[dict[str, object]]:
+    rows: list[dict[str, object]] = []
+    for start_hour, end_hour in INTERVALS:
+        start_second = start_hour * 3600
+        end_second = end_hour * 3600
+        ranges_pt: dict[str, float | None] = {}
+        coverage: dict[str, float] = {}
+        indices: dict[str, int | None] = {}
+
+        for component_index, component in enumerate(("x", "y"), 1):
+            values_pt = [
+                observed_nT * 1000.0 - interpolate_sq_pt(sq[component], second_of_day)
+                for second_of_day, x_nT, y_nT in samples
+                if start_second <= second_of_day < end_second
+                for observed_nT in ((x_nT, y_nT)[component_index - 1],)
+                if observed_nT is not None
+            ]
+            coverage[component] = len(values_pt) / (end_second - start_second)
+            if coverage[component] < minimum_coverage or not values_pt:
+                ranges_pt[component] = None
+                indices[component] = None
+            else:
+                component_range_pt = max(values_pt) - min(values_pt)
+                ranges_pt[component] = component_range_pt
+                indices[component] = classify_range_pt(component_range_pt, k9_nT)
+
+        combined_index = (
+            max(indices["x"], indices["y"])
+            if indices["x"] is not None and indices["y"] is not None
+            else None
+        )
+        rows.append(
+            {
+                "date": day.isoformat(),
+                "interval_utc": f"{start_hour:02d}:00-{end_hour:02d}:00",
+                "x_range_nT": None if ranges_pt["x"] is None else ranges_pt["x"] / 1000.0,
+                "y_range_nT": None if ranges_pt["y"] is None else ranges_pt["y"] / 1000.0,
+                "x_coverage": coverage["x"],
+                "y_coverage": coverage["y"],
+                "k_x": indices["x"],
+                "k_y": indices["y"],
+                "k_combined": combined_index,
+                "stored_k_raw": None,
+                "stored_k": None,
+                "matches_stored": "",
+            }
+        )
     return rows
 
 
@@ -271,25 +389,33 @@ def write_comprehensive(rows: list[dict[str, object]], output: TextIO) -> None:
 
 def main() -> int:
     parser = argparse.ArgumentParser(
-        description="Calculate local three-hour K indices from an INTERMAGNET IAF month file.",
+        description="Calculate local three-hour K indices from an IAF or IAGA data file.",
         formatter_class=argparse.RawDescriptionHelpFormatter,
         epilog=(
             "Examples:\n"
             "  Bootstrap SQ and save it: python calculate_ih_k_index.py WIC/WIC23DEC.BIN --sq-output WIC/202312WICsq\n"
             "  Use an SQ file: python calculate_ih_k_index.py WIC/WIC23DEC.BIN --sq-input WIC/202311WICsq\n"
+            "  Use IAGA 1-second data: python calculate_ih_k_index.py data.txt --input-format iaga --sq-input KIR/202310KIRsq --k9-limit 1500\n"
             "  Set K9 to 500 nT: python calculate_ih_k_index.py WIC/WIC23DEC.BIN --k9-limit 500\n\n"
-            "SQ files contain 24 rows of X, Y, Z values in pT. The positional SQ-file argument is\n"
-            "still accepted for compatibility; --sq-input is preferred."
+            "SQ files contain 24 rows of X, Y, Z values in pT. IAGA input requires an SQ source\n"
+            "and --k9-limit because neither value is supplied by the data file. The positional\n"
+            "SQ-file argument is still accepted for compatibility; --sq-input is preferred."
         ),
     )
-    parser.add_argument("month_file", nargs="?", type=Path, default=Path("KIR/KIR23DEC.BIN"))
+    parser.add_argument("input_file", nargs="?", type=Path, default=Path("KIR/KIR23DEC.BIN"))
     parser.add_argument("sq_file", nargs="?", type=Path, help="legacy positional SQ file in pT")
+    parser.add_argument(
+        "--input-format",
+        choices=("iaf", "iaga"),
+        default="iaf",
+        help="input format (default: iaf)",
+    )
     parser.add_argument("--sq-input", type=Path, help="existing 24-row SQ file in pT")
     parser.add_argument("--sq-output", type=Path, help="write the SQ curve used by this run in pT")
     parser.add_argument(
         "--bootstrap-file",
         type=Path,
-        help="IAF month file used to create an SQ curve (default: month_file being processed)",
+        help="IAF month file used to create an SQ curve (default: IAF input file)",
     )
     parser.add_argument("--bootstrap-days", type=int, default=10, help="quietest days to use (default: 10)")
     parser.add_argument("-o", "--output", type=Path, help="CSV output path (default: stdout)")
@@ -302,7 +428,7 @@ def main() -> int:
         "--minimum-coverage",
         type=float,
         default=0.9,
-        help="minimum valid minute fraction per component and interval (default: 0.9)",
+        help="minimum valid sample fraction per component and interval (default: 0.9)",
     )
     parser.add_argument(
         "--k9-limit",
@@ -315,8 +441,17 @@ def main() -> int:
         parser.error("--minimum-coverage must be greater than 0 and at most 1")
     if args.k9_limit is not None and (not math.isfinite(args.k9_limit) or args.k9_limit <= 0):
         parser.error("--k9-limit must be finite and greater than 0")
+    if args.input_format == "iaga" and args.k9_limit is None:
+        parser.error("--k9-limit is required with --input-format iaga")
     if args.sq_input and args.sq_file:
         parser.error("use either --sq-input or the positional SQ file, not both")
+    if (
+        args.input_format == "iaga"
+        and not args.sq_input
+        and not args.sq_file
+        and not args.bootstrap_file
+    ):
+        parser.error("IAGA input requires --sq-input or an IAF --bootstrap-file")
     if args.output and args.comprehensive_output and args.output.resolve() == args.comprehensive_output.resolve():
         parser.error("CSV and comprehensive outputs must use different paths")
     if args.sq_output and any(
@@ -326,34 +461,46 @@ def main() -> int:
         parser.error("SQ output must use a different path from K-index outputs")
 
     try:
-        records = parse_month_file(args.month_file)
+        records = parse_month_file(args.input_file) if args.input_format == "iaf" else None
         sq_input = args.sq_input or args.sq_file
         bootstrap_path: Path | None = None
         if sq_input:
             sq = read_sq_curve(sq_input)
             bootstrap_description = f"SQ file {sq_input}"
         else:
-            bootstrap_path = args.bootstrap_file or args.month_file
-            bootstrap_records = (
-                records if bootstrap_path.resolve() == args.month_file.resolve()
-                else parse_month_file(bootstrap_path)
-            )
+            bootstrap_path = args.bootstrap_file or args.input_file
+            if records is not None and bootstrap_path.resolve() == args.input_file.resolve():
+                bootstrap_records = records
+            else:
+                bootstrap_records = parse_month_file(bootstrap_path)
             sq, quiet_days = bootstrap_sq_curve(bootstrap_records, args.bootstrap_days)
             bootstrap_description = (
                 f"bootstrapped SQ from {bootstrap_path} using {len(quiet_days)} quiet days: "
                 f"{', '.join(quiet_days)}"
             )
-        if args.sq_output and args.sq_output.resolve() == args.month_file.resolve():
-            parser.error("SQ output must not overwrite the IAF month file")
+        if args.sq_output and args.sq_output.resolve() == args.input_file.resolve():
+            parser.error("SQ output must not overwrite the input file")
         if args.sq_output and bootstrap_path and args.sq_output.resolve() == bootstrap_path.resolve():
             parser.error("SQ output must not overwrite the IAF bootstrap file")
-        rows = [
-            row
-            for record in records
-            for row in calculate_day(
-                record, sq, args.minimum_coverage, k9_override_nT=args.k9_limit
-            )
-        ]
+        if args.input_format == "iaga":
+            rows = []
+            processed_days = 0
+            for day, samples in iter_iaga_days(args.input_file):
+                rows.extend(
+                    calculate_iaga_day(
+                        day, samples, sq, args.minimum_coverage, args.k9_limit
+                    )
+                )
+                processed_days += 1
+        else:
+            rows = [
+                row
+                for record in records
+                for row in calculate_day(
+                    record, sq, args.minimum_coverage, k9_override_nT=args.k9_limit
+                )
+            ]
+            processed_days = len(records)
     except (OSError, ValueError, struct.error) as error:
         parser.error(str(error))
 
@@ -375,13 +522,19 @@ def main() -> int:
         with args.comprehensive_output.open("w", encoding="ascii", newline="\n") as comprehensive:
             write_comprehensive(rows, comprehensive)
 
-    comparisons = [row for row in rows if row["matches_stored"] != ""]
-    matches = sum(row["matches_stored"] == 1 for row in comparisons)
-    print(
-        f"Processed {len(records)} days and {len(rows)} three-hour intervals; "
-        f"{matches}/{len(comparisons)} calculated combined K values match the stored values.",
-        file=sys.stderr,
-    )
+    if args.input_format == "iaf":
+        comparisons = [row for row in rows if row["matches_stored"] != ""]
+        matches = sum(row["matches_stored"] == 1 for row in comparisons)
+        print(
+            f"Processed {processed_days} days and {len(rows)} three-hour intervals; "
+            f"{matches}/{len(comparisons)} calculated combined K values match the stored values.",
+            file=sys.stderr,
+        )
+    else:
+        print(
+            f"Processed {processed_days} days and {len(rows)} three-hour intervals from IAGA data.",
+            file=sys.stderr,
+        )
     print(bootstrap_description, file=sys.stderr)
     if args.k9_limit is not None:
         print(f"K9 range override: {args.k9_limit:g} nT", file=sys.stderr)
