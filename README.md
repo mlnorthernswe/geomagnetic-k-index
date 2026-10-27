@@ -19,10 +19,10 @@ python3 calculate_ih_k_index.py WIC/WIC23DEC.BIN \
 
 If no SQ input or bootstrap file is specified, the tool bootstraps from the month being processed. It ranks days using the eight K values embedded in each IAF daily record, selects the quietest days (10 by default), and takes hourly X/Y/Z medians to form an SQ curve.
 
-To calculate from an IAGA-2002 file containing one-second X/Y samples, select the input format explicitly and provide an SQ curve and the station's K9 range:
+To calculate from an IAGA-2002 file (plain ASCII or compressed `.gz`, `.bz2`, `.xz`) containing one-second X/Y samples, select the input format explicitly and provide an SQ curve and the station's K9 range:
 
 ```bash
-python3 calculate_ih_k_index.py data.txt --input-format iaga \
+python3 calculate_ih_k_index.py KIR/kir202609qsec.sec.gz --input-format iaga \
   --sq-input KIR/202310KIRsq --k9-limit 1500 \
   -o /tmp/iaga-k-index.csv
 ```

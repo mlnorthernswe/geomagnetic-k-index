@@ -6,6 +6,8 @@ This document describes the algorithm developed by Dr. Ingemar Haggstrom to comp
 
 The K-index quantifies disturbances in the horizontal magnetic field components, X and Y, on a scale from 0 to 9. For each three-hour interval, calculate the range of the deflection from the presumed solar-quiet (SQ) value. The range is the maximum deflection minus the minimum deflection.
 
+The overall sequence from monthly SQ refinement to three-hour K classification is summarized in Figure 1.
+
 ## Kiruna K-index thresholds
 
 | K-index | Deflection range (nT) |
@@ -40,7 +42,7 @@ The magnetometer records data every second. Interpolate the 24 hourly SQ values 
 7. For each hour and component, take the median of the qualifying data to produce the updated 24-value SQ file.
 8. Use this file as the SQ curve for the next month.
 
-The two passes use progressively tighter thresholds because the SQ curve is expected to vary by less than 10 nT from month to month. The first pass allows deviations up to 100 nT; the second refines the result using a 10 nT limit.
+The two passes use progressively tighter thresholds because the SQ curve is expected to vary by less than 10 nT from month to month. The first pass allows deviations up to 100 nT; the second refines the result using a 10 nT limit. Figure 2 illustrates how the filtered observations become the 24-row SQ file.
 
 ## First-run bootstrap when no previous SQ file exists
 
@@ -124,3 +126,11 @@ The source document's example shows 24 hourly mean values. The columns are X, Y,
 | 2016032616 | 2016032617 |
 | 2016032816 | 2016032817 |
 | 2016033122 | 2016033123 |
+
+\newpage
+
+## Figures
+
+![Figure 1. Overall IH method, from monthly SQ refinement through three-hour K classification.](IH-method-flow.svg)
+
+![Figure 2. Creation of the 24-hour SQ file from filtered one-second X, Y, and Z observations.](SQ-file-creation.svg)

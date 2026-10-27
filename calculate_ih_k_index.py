@@ -14,7 +14,10 @@ from __future__ import annotations
 
 import argparse
 import bisect
+import bz2
 import csv
+import gzip
+import lzma
 import math
 import statistics
 import struct
@@ -200,6 +203,19 @@ def calculate_day(
     return rows
 
 
+def open_iaga_text(path: Path) -> TextIO:
+    with path.open("rb") as raw:
+        magic = raw.read(6)
+    suffix = path.suffix.lower()
+    if suffix in (".gz", ".gzip") or magic.startswith(b"\x1f\x8b"):
+        return gzip.open(path, "rt", encoding="ascii")
+    if suffix in (".bz2", ".bzip2") or magic.startswith(b"BZh"):
+        return bz2.open(path, "rt", encoding="ascii")
+    if suffix in (".xz", ".lzma") or magic.startswith(b"\xfd7zXZ\x00"):
+        return lzma.open(path, "rt", encoding="ascii")
+    return path.open("r", encoding="ascii")
+
+
 def iter_iaga_days(
     path: Path,
 ) -> Iterator[tuple[date, list[tuple[float, float | None, float | None]]]]:
@@ -208,51 +224,54 @@ def iter_iaga_days(
     day_samples: list[tuple[float, float | None, float | None]] = []
     previous_timestamp: datetime | None = None
 
-    with path.open(encoding="ascii") as source:
-        for line_number, line in enumerate(source, 1):
-            fields = line.replace("|", " ").split()
-            if not fields:
-                continue
-            if fields[0].upper() == "DATE" and len(fields) >= 3 and fields[2].upper() == "DOY":
-                component_columns = {
-                    component: index
-                    for index, field in enumerate(fields[3:], 3)
-                    for component in ("x", "y")
-                    if field.upper().endswith(component.upper())
-                }
-                if set(component_columns) != {"x", "y"}:
-                    raise ValueError(f"{path}:{line_number}: IAGA header must contain X and Y columns")
-                continue
-            if not fields[0][0:1].isdigit() or len(fields[0]) != 10 or fields[0][4] != "-":
-                continue
-            if component_columns is None:
-                raise ValueError(f"{path}:{line_number}: IAGA data encountered before the DATE/TIME/DOY header")
-            try:
-                timestamp = datetime.fromisoformat(f"{fields[0]}T{fields[1]}")
-                values = []
-                for component in ("x", "y"):
-                    value = float(fields[component_columns[component]])
-                    values.append(None if not math.isfinite(value) or abs(value) in (99999, 999999) else value)
-            except (IndexError, ValueError) as error:
-                raise ValueError(f"{path}:{line_number}: invalid IAGA timestamp or component value") from error
+    try:
+        with open_iaga_text(path) as source:
+            for line_number, line in enumerate(source, 1):
+                fields = line.replace("|", " ").split()
+                if not fields:
+                    continue
+                if fields[0].upper() == "DATE" and len(fields) >= 3 and fields[2].upper() == "DOY":
+                    component_columns = {
+                        component: index
+                        for index, field in enumerate(fields[3:], 3)
+                        for component in ("x", "y")
+                        if field.upper().endswith(component.upper())
+                    }
+                    if set(component_columns) != {"x", "y"}:
+                        raise ValueError(f"{path}:{line_number}: IAGA header must contain X and Y columns")
+                    continue
+                if not fields[0][0:1].isdigit() or len(fields[0]) != 10 or fields[0][4] != "-":
+                    continue
+                if component_columns is None:
+                    raise ValueError(f"{path}:{line_number}: IAGA data encountered before the DATE/TIME/DOY header")
+                try:
+                    timestamp = datetime.fromisoformat(f"{fields[0]}T{fields[1]}")
+                    values = []
+                    for component in ("x", "y"):
+                        value = float(fields[component_columns[component]])
+                        values.append(None if not math.isfinite(value) or abs(value) in (99999, 999999) else value)
+                except (IndexError, ValueError) as error:
+                    raise ValueError(f"{path}:{line_number}: invalid IAGA timestamp or component value") from error
 
-            if previous_timestamp is not None and timestamp <= previous_timestamp:
-                raise ValueError(f"{path}:{line_number}: IAGA timestamps must be strictly increasing")
-            previous_timestamp = timestamp
-            sample_day = timestamp.date()
-            if current_day is not None and sample_day != current_day:
-                if sample_day < current_day:
-                    raise ValueError(f"{path}:{line_number}: IAGA dates must be in chronological order")
-                yield current_day, day_samples
-                day_samples = []
-            current_day = sample_day
-            seconds_of_day = (
-                timestamp.hour * 3600
-                + timestamp.minute * 60
-                + timestamp.second
-                + timestamp.microsecond / 1_000_000
-            )
-            day_samples.append((seconds_of_day, values[0], values[1]))
+                if previous_timestamp is not None and timestamp <= previous_timestamp:
+                    raise ValueError(f"{path}:{line_number}: IAGA timestamps must be strictly increasing")
+                previous_timestamp = timestamp
+                sample_day = timestamp.date()
+                if current_day is not None and sample_day != current_day:
+                    if sample_day < current_day:
+                        raise ValueError(f"{path}:{line_number}: IAGA dates must be in chronological order")
+                    yield current_day, day_samples
+                    day_samples = []
+                current_day = sample_day
+                seconds_of_day = (
+                    timestamp.hour * 3600
+                    + timestamp.minute * 60
+                    + timestamp.second
+                    + timestamp.microsecond / 1_000_000
+                )
+                day_samples.append((seconds_of_day, values[0], values[1]))
+    except (EOFError, lzma.LZMAError, gzip.BadGzipFile) as error:
+        raise ValueError(f"{path}: invalid compressed IAGA file: {error}") from error
 
     if component_columns is None:
         raise ValueError(f"{path}: missing IAGA DATE/TIME/DOY header with X and Y columns")
@@ -395,9 +414,10 @@ def main() -> int:
             "Examples:\n"
             "  Bootstrap SQ and save it: python calculate_ih_k_index.py WIC/WIC23DEC.BIN --sq-output WIC/202312WICsq\n"
             "  Use an SQ file: python calculate_ih_k_index.py WIC/WIC23DEC.BIN --sq-input WIC/202311WICsq\n"
-            "  Use IAGA 1-second data: python calculate_ih_k_index.py data.txt --input-format iaga --sq-input KIR/202310KIRsq --k9-limit 1500\n"
+            "  Use IAGA 1-second data: python calculate_ih_k_index.py KIR/kir202609qsec.sec.gz --input-format iaga --sq-input KIR/202310KIRsq --k9-limit 1500\n"
             "  Set K9 to 500 nT: python calculate_ih_k_index.py WIC/WIC23DEC.BIN --k9-limit 500\n\n"
-            "SQ files contain 24 rows of X, Y, Z values in pT. IAGA input requires an SQ source\n"
+            "SQ files contain 24 rows of X, Y, Z values in pT. Plain-text and gzip/bzip2/xz-\n"
+            "compressed IAGA files are supported. IAGA input requires an SQ source\n"
             "and --k9-limit because neither value is supplied by the data file. The positional\n"
             "SQ-file argument is still accepted for compatibility; --sq-input is preferred."
         ),
