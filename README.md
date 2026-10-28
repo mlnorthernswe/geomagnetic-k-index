@@ -17,7 +17,7 @@ python3 calculate_ih_k_index.py WIC/WIC23DEC.BIN \
   -o WIC/WIC23DEC-k-index.csv
 ```
 
-If no SQ input or bootstrap file is specified, the tool bootstraps from the month being processed. It ranks days using the eight K values embedded in each IAF daily record, selects the quietest days (10 by default), and takes hourly X/Y/Z medians to form an SQ curve.
+If no SQ input or bootstrap file is specified, the tool bootstraps from the month being processed. It ranks days using the eight K values embedded in each IAF daily record, selects the quietest days (10 by default), and takes hourly X/Y/Z medians (or means with `--sq-estimator mean`) to form an SQ curve. High-latitude stations (such as Kiruna) should use `median` (the default) because isolated auroral disturbances can occur even on quiet days.
 
 To calculate from an IAGA-2002 file (plain ASCII or compressed `.gz`, `.bz2`, `.xz`) containing one-second X/Y samples, select the input format explicitly and provide an SQ curve and the station's K9 range:
 
@@ -48,6 +48,7 @@ Run `python3 calculate_ih_k_index.py --help` for all options.
 - `--bootstrap-file PATH`: use another IAF month file to construct the SQ curve; defaults to the month being processed.
 - `--input-format {iaf,iaga}`: select IAF binary input (default) or timestamped IAGA-2002 ASCII input.
 - `--bootstrap-days N`: number of quietest valid days to use for bootstrap (default: 10).
+- `--sq-estimator {median,mean}`: hourly estimator used when bootstrapping an SQ curve; `median` is recommended for high-latitude stations due to the risk of outliers even on quiet days (default: `median`).
 - `--k9-limit NT`: override the station K9 range; by default it is read from the IAF header.
 - `--minimum-coverage FRACTION`: minimum valid sample coverage for each component and interval (default: 0.9).
 - `-o PATH`, `--output PATH`: write detailed per-interval results as CSV (default: standard output).

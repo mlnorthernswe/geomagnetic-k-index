@@ -82,10 +82,18 @@ def classify_range_pt(range_pt: float, k9_nT: int) -> int:
 
 
 def bootstrap_sq_curve(
-    records: list[tuple[int, ...]], quiet_day_count: int = 10
+    records: list[tuple[int, ...]],
+    quiet_day_count: int = 10,
+    estimator: str = "median",
 ) -> tuple[dict[str, tuple[float, ...]], list[str]]:
     if quiet_day_count < 1:
         raise ValueError("bootstrap day count must be at least 1")
+    if estimator == "median":
+        aggregate = statistics.median
+    elif estimator == "mean":
+        aggregate = statistics.fmean
+    else:
+        raise ValueError(f"unsupported SQ estimator: {estimator}")
 
     candidates: list[tuple[tuple[int, int, int], str, tuple[int, ...]]] = []
     for words in records:
@@ -114,7 +122,7 @@ def bootstrap_sq_curve(
             ]
             if not samples:
                 raise ValueError(f"cannot bootstrap {component.upper()} SQ: hour {hour:02d} is missing")
-            hourly_values.append(statistics.median(samples))
+            hourly_values.append(aggregate(samples))
         curve[component] = tuple(hourly_values)
 
     return curve, [day for _, day, _ in selected]
@@ -438,6 +446,12 @@ def main() -> int:
         help="IAF month file used to create an SQ curve (default: IAF input file)",
     )
     parser.add_argument("--bootstrap-days", type=int, default=10, help="quietest days to use (default: 10)")
+    parser.add_argument(
+        "--sq-estimator",
+        choices=("median", "mean"),
+        default="median",
+        help="hourly estimator when bootstrapping an SQ curve; median is recommended for high-latitude stations due to outlier risk on quiet days (default: median)",
+    )
     parser.add_argument("-o", "--output", type=Path, help="CSV output path (default: stdout)")
     parser.add_argument(
         "--comprehensive-output",
@@ -493,9 +507,11 @@ def main() -> int:
                 bootstrap_records = records
             else:
                 bootstrap_records = parse_month_file(bootstrap_path)
-            sq, quiet_days = bootstrap_sq_curve(bootstrap_records, args.bootstrap_days)
+            sq, quiet_days = bootstrap_sq_curve(
+                bootstrap_records, args.bootstrap_days, estimator=args.sq_estimator
+            )
             bootstrap_description = (
-                f"bootstrapped SQ from {bootstrap_path} using {len(quiet_days)} quiet days: "
+                f"bootstrapped SQ ({args.sq_estimator}) from {bootstrap_path} using {len(quiet_days)} quiet days: "
                 f"{', '.join(quiet_days)}"
             )
         if args.sq_output and args.sq_output.resolve() == args.input_file.resolve():

@@ -36,13 +36,13 @@ The magnetometer records data every second. Interpolate the 24 hourly SQ values 
 1. Read the previous month's 24 hourly SQ mean values for X, Y, and Z.
 2. Interpolate the hourly values to one SQ value per second.
 3. Select quiet intervals by comparing observations with the interpolated SQ values at the corresponding times. A time qualifies for the first pass when the difference is within 100 nT (the K3 threshold). Form a solar-quiet interval file from the qualifying times.
-4. For each hour and component, take the median of the qualifying data to produce a new 24-value SQ file.
+4. For each hour and component, take the median (or mean) of the qualifying data to produce a new 24-value SQ file.
 5. Interpolate this new hourly curve to one value per second.
 6. Repeat the quiet-interval selection using a tighter difference of 10 nT (the K0 threshold).
-7. For each hour and component, take the median of the qualifying data to produce the updated 24-value SQ file.
+7. For each hour and component, take the median (or mean) of the qualifying data to produce the updated 24-value SQ file.
 8. Use this file as the SQ curve for the next month.
 
-The two passes use progressively tighter thresholds because the SQ curve is expected to vary by less than 10 nT from month to month. The first pass allows deviations up to 100 nT; the second refines the result using a 10 nT limit. Figure 2 illustrates how the filtered observations become the 24-row SQ file.
+The two passes use progressively tighter thresholds because the SQ curve is expected to vary by less than 10 nT from month to month. The first pass allows deviations up to 100 nT; the second refines the result using a 10 nT limit. Either the median or mean may be used per hour, though the median is recommended for high-latitude stations due to the risk of outliers even on quiet days. Figure 2 illustrates how the filtered observations become the 24-row SQ file.
 
 ## First-run bootstrap when no previous SQ file exists
 
@@ -50,9 +50,9 @@ The monthly update above assumes that a previous month's SQ file is available. O
 
 1. Collect an initial calibration window. A full month is a practical default because the SQ curve is updated monthly. Use the GFZ International Quiet and Disturbed Days list to identify candidate dates: Q1 is the quietest day of the month, through Q10, and D1-D5 are the most disturbed days. Prefer Q1-Q5 when they provide enough valid measurements; otherwise include additional Q days up to Q10. Exclude D1-D5 and data already identified as invalid.
 2. Group the measurements by hour of day, using the same time basis and timestamp alignment that will be used for the operational SQ curve.
-3. For each of the 24 hours and each component (X, Y, and Z), take the median of the valid measurements in that hour across the calibration window. These 72 medians form the provisional 24-hour SQ seed.
+3. For each of the 24 hours and each component (X, Y, and Z), take the median (or mean; median is recommended at high latitudes to guard against quiet-day outliers) of the valid measurements in that hour across the calibration window to form the 72-value provisional SQ seed.
 4. Interpolate the seed to one value per second and run the standard monthly SQ update above on the calibration data: first with the 100 nT criterion, then with the 10 nT criterion. Use the resulting curve as the initial operational SQ curve.
-5. If an hour lacks enough valid observations to estimate a reliable median, do not fill it with zero. Extend the calibration window or obtain a suitable SQ curve from another trusted source. Until all hourly values are available, mark the SQ curve and any K-indices that depend on it as unavailable or provisional.
+5. If an hour lacks enough valid observations to estimate a reliable hourly value, do not fill it with zero. Extend the calibration window or obtain a suitable SQ curve from another trusted source. Until all hourly values are available, mark the SQ curve and any K-indices that depend on it as unavailable or provisional.
 
 The GFZ quiet/disturbed-day classification is based on planetary Kp criteria, not Kiruna-specific measurements. Treat it as a way to choose candidate dates, not as a substitute for the local 100 nT and 10 nT filters in the SQ update. The dataset is available from the [GFZ Kp data page](https://kp.gfz.de/daten) and is described as CC BY 4.0; cite Matzka et al. (2021), [Geomagnetic Kp index, version 1.0](https://doi.org/10.5880/Kp.0001), when using it.
 
