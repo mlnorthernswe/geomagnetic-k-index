@@ -190,7 +190,7 @@ def calculate_day(
                 "y_coverage": coverage["y"],
                 "k_x": indices["x"],
                 "k_y": indices["y"],
-                "k_combined": combined_index,
+                "k": combined_index,
                 "stored_k_raw": stored_raw,
                 "stored_k": stored_index,
                 "matches_stored": (
@@ -327,7 +327,7 @@ def calculate_iaga_day(
                 "y_coverage": coverage["y"],
                 "k_x": indices["x"],
                 "k_y": indices["y"],
-                "k_combined": combined_index,
+                "k": combined_index,
                 "stored_k_raw": None,
                 "stored_k": None,
                 "matches_stored": "",
@@ -368,7 +368,7 @@ def write_csv(rows: list[dict[str, object]], output: TextIO) -> None:
         "y_coverage",
         "k_x",
         "k_y",
-        "k_combined",
+        "k",
         "stored_k_raw",
         "stored_k",
         "matches_stored",
@@ -394,7 +394,7 @@ def write_comprehensive(rows: list[dict[str, object]], output: TextIO) -> None:
 
     for day, day_rows in days.items():
         day_rows.sort(key=lambda row: str(row["interval_utc"]))
-        indices = [row["k_combined"] for row in day_rows]
+        indices = [row["k"] for row in day_rows]
         values = ["-" if index is None else str(index) for index in indices]
         available = [index for index in indices if index is not None]
         if not available:
