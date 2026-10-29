@@ -1,0 +1,38 @@
+{
+  "defaults": {
+    "bootstrap_days": 10,
+    "minimum_coverage": 0.9,
+    "sq_estimator": "median"
+  },
+  "stations": {
+    "KIR": {
+      "name": "Kiruna",
+      "directory": "KIR",
+      "high_latitude": true,
+      "sq_estimator": "median",
+      "k9_limit": 1500
+    },
+    "BEL": {
+      "name": "Belsk",
+      "directory": "BEL",
+      "high_latitude": false,
+      "sq_estimator": "median",
+      "k9_limit": 450
+    },
+    "WIC": {
+      "name": "Conrad Observatory",
+      "directory": "WIC",
+      "high_latitude": false,
+      "sq_estimator": "median",
+      "k9_limit": 500
+    },
+    "HYB": {
+      "name": "Hyderabad",
+      "directory": "HYB",
+      "high_latitude": false,
+      "sq_estimator": "median",
+      "k9_limit": 300
+    }
+  }
+}
+

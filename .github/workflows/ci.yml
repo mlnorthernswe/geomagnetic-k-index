@@ -1,0 +1,70 @@
+name: K-Index Pipeline & CI
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+    branches: [main]
+  workflow_dispatch:
+
+jobs:
+  test-and-pipeline:
+    name: Unit Tests & Operational Pipeline
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+
+      - name: Syntax & bytecode check
+        run: python3 -m py_compile calculate_ih_k_index.py run_pipeline.py tests/test_ih_k_index.py
+
+      - name: Run unit & regression tests
+        run: python3 -m unittest discover -s tests -v
+
+      - name: Run multi-station K-index pipeline
+        run: python3 run_pipeline.py --output-dir artifacts/k-index --save-generated-sq
+
+      - name: Upload K-index & SQ pipeline outputs
+        uses: actions/upload-artifact@v4
+        with:
+          name: k-index-pipeline-outputs
+          path: artifacts/k-index/
+
+  build-docs:
+    name: Build Algorithm PDF
+    runs-on: ubuntu-latest
+    if: hashFiles('IH-method-flow.svg', 'SQ-file-creation.svg') != ''
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Install Pandoc and XeLaTeX
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y --no-install-recommends \
+            pandoc \
+            texlive-xetex \
+            texlive-latex-recommended \
+            texlive-latex-extra \
+             texlive-fonts-recommended \
+            librsvg2-bin
+
+      - name: Compile K-index-calculations-algorithm-revised.pdf
+        run: |
+          pandoc K-index-calculations-algorithm-revised.md \
+            -o K-index-calculations-algorithm-revised.pdf \
+            --pdf-engine=xelatex \
+            -V geometry:top=0.9in -V geometry:bottom=0.9in -V geometry:left=1in -V geometry:right=1in \
+            -V header-includes='\usepackage{caption}\captionsetup[figure]{labelformat=empty}\usepackage{float}\floatplacement{figure}{H}\let\origfootnote\footnote\newcounter{fnrefs}\renewcommand{\footnote}[1]{\stepcounter{fnrefs}\ifnum\value{fnrefs}=2\footnotemark[1]\else\setcounter{footnote}{0}\origfootnote{#1}\fi}'
+
+      - name: Upload compiled PDF
+        uses: actions/upload-artifact@v4
+        with:
+          name: algorithm-pdf
+          path: K-index-calculations-algorithm-revised.pdf
+

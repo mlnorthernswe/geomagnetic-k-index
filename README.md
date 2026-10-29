@@ -60,6 +60,32 @@ The CSV includes X/Y deflection ranges, coverage, component K values, combined K
 
 The default IAF path uses one-minute means, while the original SQ/K method described in the accompanying algorithm uses one-second samples. IAGA input can retain one-second resolution; IAF-derived K values remain estimates and may not match the embedded values exactly.
 
+## Multi-station pipeline (`run_pipeline.py`)
+
+To run all configured stations chronologically across months (automatically using existing `YYYYMM<STA>sq` files or chaining each month's bootstrapped SQ curve into the next month):
+
+```bash
+python3 run_pipeline.py
+```
+
+Station defaults (`k9_limit`, `sq_estimator`, `bootstrap_days`, `minimum_coverage`) are configured in `stations.json`. Common pipeline flags:
+
+- `--station CODE`: run only specific station(s), e.g. `--station KIR --station WIC`.
+- `--output-dir DIR`: write outputs to a separate directory instead of the station folders.
+- `--sq-estimator {median,mean}`: override the configured SQ estimator for the run.
+- `--save-generated-sq`: save newly bootstrapped `YYYYMM<STA>sq` files to disk.
+- `--dry-run`: preview the chronological SQ chaining and match statistics without writing files.
+
+## Testing & CI
+
+Run the automated unit and regression test suite using Python's standard library `unittest` runner:
+
+```bash
+python3 -m unittest discover -s tests -v
+```
+
+A GitHub Actions workflow (`.github/workflows/ci.yml`) automatically runs the test suite, executes `run_pipeline.py`, and builds `K-index-calculations-algorithm-revised.pdf` on every push and pull request.
+
 ## Algorithm reference
 
 - `K-index-calculations-algorithm.pdf`: original algorithm description.
