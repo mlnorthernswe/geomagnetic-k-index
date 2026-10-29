@@ -1,0 +1,45 @@
+stages:
+  - test
+  - pipeline
+  - docs
+
+default:
+  image: python:3.12-slim
+
+unit-tests:
+  stage: test
+  script:
+    - python3 -m py_compile calculate_ih_k_index.py run_pipeline.py tests/test_ih_k_index.py
+    - python3 -m unittest discover -s tests -v
+
+k-index-pipeline:
+  stage: pipeline
+  script:
+    - python3 run_pipeline.py --output-dir artifacts/k-index --save-generated-sq
+  artifacts:
+    name: k-index-pipeline-outputs
+    paths:
+      - artifacts/k-index/
+    expire_in: 30 days
+
+build-algorithm-pdf:
+  stage: docs
+  rules:
+    - exists:
+        - IH-method-flow.svg
+        - SQ-file-creation.svg
+  before_script:
+    - apt-get update
+    - apt-get install -y --no-install-recommends pandoc texlive-xetex texlive-latex-recommended texlive-latex-extra texlive-fonts-recommended librsvg2-bin
+  script:
+    - >
+      pandoc K-index-calculations-algorithm-revised.md
+      -o K-index-calculations-algorithm-revised.pdf
+      --pdf-engine=xelatex
+      -V geometry:top=0.9in -V geometry:bottom=0.9in -V geometry:left=1in -V geometry:right=1in
+      -V header-includes='\usepackage{caption}\captionsetup[figure]{labelformat=empty}\usepackage{float}\floatplacement{figure}{H}\let\origfootnote\footnote\newcounter{fnrefs}\renewcommand{\footnote}[1]{\stepcounter{fnrefs}\ifnum\value{fnrefs}=2\footnotemark[1]\else\setcounter{footnote}{0}\origfootnote{#1}\fi}'
+  artifacts:
+    name: algorithm-pdf
+    paths:
+      - K-index-calculations-algorithm-revised.pdf
+    expire_in: 30 days

@@ -84,7 +84,7 @@ Run the automated unit and regression test suite using Python's standard library
 python3 -m unittest discover -s tests -v
 ```
 
-A GitHub Actions workflow (`.github/workflows/ci.yml`) automatically runs the test suite, executes `run_pipeline.py`, and builds `K-index-calculations-algorithm-revised.pdf` on every push and pull request.
+CI/CD configurations for both GitHub Actions (`.github/workflows/ci.yml`) and GitLab CI (`.gitlab-ci.yml`) automatically run the test suite, execute `run_pipeline.py`, and build `K-index-calculations-algorithm-revised.pdf`.
 
 ## Algorithm reference
 
