@@ -51,7 +51,10 @@ jobs:
             texlive-xetex \
             texlive-latex-recommended \
             texlive-latex-extra \
-             texlive-fonts-recommended \
+            texlive-fonts-recommended \
+            lmodern \
+            fonts-lmodern \
+            fonts-dejavu-core \
             librsvg2-bin
 
       - name: Compile K-index-calculations-algorithm-revised.pdf

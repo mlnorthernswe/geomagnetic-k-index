@@ -30,7 +30,7 @@ build-algorithm-pdf:
         - SQ-file-creation.svg
   before_script:
     - apt-get update
-    - apt-get install -y --no-install-recommends pandoc texlive-xetex texlive-latex-recommended texlive-latex-extra texlive-fonts-recommended librsvg2-bin
+    - apt-get install -y --no-install-recommends pandoc texlive-xetex texlive-latex-recommended texlive-latex-extra texlive-fonts-recommended lmodern fonts-lmodern fonts-dejavu-core librsvg2-bin
   script:
     - >
       pandoc K-index-calculations-algorithm-revised.md
@@ -43,3 +43,4 @@ build-algorithm-pdf:
     paths:
       - K-index-calculations-algorithm-revised.pdf
     expire_in: 30 days
+
