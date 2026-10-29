@@ -1,0 +1,108 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="1200" height="820" viewBox="0 0 1200 820" role="img" aria-labelledby="title description">
+  <title id="title">IH local K-index method</title>
+  <desc id="description">Monthly solar-quiet curve refinement feeds into one-second X and Y deflection calculations, three-hour ranges, threshold classification, and a combined K index.</desc>
+  <defs>
+    <marker id="arrow" markerWidth="10" markerHeight="10" refX="8" refY="5" orient="auto">
+      <path d="M0 0 L10 5 L0 10 Z" fill="#526579"/>
+    </marker>
+    <style>
+      text { font-family: Arial, Helvetica, sans-serif; fill: #183044; }
+      .title { font-size: 30px; font-weight: 700; }
+      .subtitle { font-size: 16px; fill: #526579; }
+      .section { font-size: 18px; font-weight: 700; }
+      .box-title { font-size: 17px; font-weight: 700; }
+      .body { font-size: 14px; fill: #344b5e; }
+      .light, .light tspan { fill: #ffffff; }
+      .small { font-size: 13px; fill: #526579; }
+      .arrow { fill: none; stroke: #526579; stroke-width: 2.5; marker-end: url(#arrow); }
+    </style>
+  </defs>
+
+  <rect width="1200" height="820" fill="#f5f8fa"/>
+  <text class="title" x="48" y="52">IH local K-index method</text>
+  <text class="subtitle" x="48" y="80">From one-second magnetometer samples to eight local K values per day</text>
+
+  <text class="section" x="48" y="126">1. Update the monthly solar-quiet (SQ) curve</text>
+
+  <rect x="48" y="150" width="250" height="150" rx="10" fill="#e2f2ef" stroke="#178477" stroke-width="2"/>
+  <text class="box-title" x="68" y="183">Previous SQ curve</text>
+  <text class="body" x="68" y="214">
+    <tspan x="68" dy="0">24 hourly means for</tspan>
+    <tspan x="68" dy="21">X, Y, and Z</tspan>
+  </text>
+
+  <rect x="348" y="150" width="250" height="150" rx="10" fill="#e2f2ef" stroke="#178477" stroke-width="2"/>
+  <text class="box-title" x="368" y="183">Interpolate to 1 Hz</text>
+  <text class="body" x="368" y="214">
+    <tspan x="368" dy="0">Estimate SQ at each</tspan>
+    <tspan x="368" dy="21">observation timestamp</tspan>
+  </text>
+
+  <rect x="648" y="150" width="250" height="150" rx="10" fill="#fff0d9" stroke="#cc791d" stroke-width="2"/>
+  <text class="box-title" x="668" y="183">Select quiet samples</text>
+  <text class="body" x="668" y="214">
+    <tspan x="668" dy="0">Pass 1: within 100 nT</tspan>
+    <tspan x="668" dy="21">of interpolated SQ;</tspan>
+    <tspan x="668" dy="21">save qualifying intervals</tspan>
+  </text>
+
+  <rect x="948" y="150" width="204" height="150" rx="10" fill="#fff0d9" stroke="#cc791d" stroke-width="2"/>
+  <text class="box-title" x="968" y="183">Refine for next month</text>
+  <text class="body" x="968" y="214">
+    <tspan x="968" dy="0">Hourly median/mean;</tspan>
+    <tspan x="968" dy="21">repeat at 10 nT</tspan>
+    <tspan x="968" dy="21">to make updated SQ</tspan>
+  </text>
+
+  <path class="arrow" d="M298 225 H338"/>
+  <path class="arrow" d="M598 225 H638"/>
+  <path class="arrow" d="M898 225 H938"/>
+
+  <rect x="48" y="326" width="500" height="72" rx="8" fill="#ffffff" stroke="#9aaaba" stroke-width="1.5" stroke-dasharray="6 5"/>
+  <text class="box-title" x="68" y="354">First run: no previous SQ?</text>
+  <text class="body" x="68" y="379">Seed 24 hourly medians (or means) from quiet days, then refine above.</text>
+  <path d="M548 362 H575 V312 H473 V302" fill="none" stroke="#7b8d9d" stroke-width="2" stroke-dasharray="6 5" marker-end="url(#arrow)"/>
+
+  <text class="section" x="48" y="460">2. Calculate K for each three-hour interval</text>
+
+  <rect x="48" y="490" width="250" height="160" rx="10" fill="#e6eef7" stroke="#4678a6" stroke-width="2"/>
+  <text class="box-title" x="68" y="524">One-second data</text>
+  <text class="body" x="68" y="555">
+    <tspan x="68" dy="0">Observed X/Y, paired</tspan>
+    <tspan x="68" dy="21">with interpolated</tspan>
+    <tspan x="68" dy="21">SQ values</tspan>
+  </text>
+
+  <rect x="348" y="490" width="250" height="160" rx="10" fill="#e6eef7" stroke="#4678a6" stroke-width="2"/>
+  <text class="box-title" x="368" y="524">Remove quiet variation</text>
+  <text class="body" x="368" y="555">
+    <tspan x="368" dy="0">Calculate residuals:</tspan>
+    <tspan x="368" dy="23">dX = X - SQX</tspan>
+    <tspan x="368" dy="23">dY = Y - SQY</tspan>
+  </text>
+
+  <rect x="648" y="490" width="250" height="160" rx="10" fill="#fff0d9" stroke="#cc791d" stroke-width="2"/>
+  <text class="box-title" x="668" y="524">Measure each range</text>
+  <text class="body" x="668" y="555">
+    <tspan x="668" dy="0">For each 3-hour window:</tspan>
+    <tspan x="668" dy="23">max(dX) - min(dX)</tspan>
+    <tspan x="668" dy="23">max(dY) - min(dY)</tspan>
+  </text>
+
+  <rect x="948" y="490" width="204" height="160" rx="10" fill="#173d52" stroke="#173d52" stroke-width="2"/>
+  <text class="box-title light" x="968" y="524">Classify and report</text>
+  <text class="body light" x="968" y="555">
+    <tspan x="968" dy="0">Apply station thresholds</tspan>
+    <tspan x="968" dy="22">to get Kx and Ky</tspan>
+    <tspan x="968" dy="25" font-weight="700">This implementation:</tspan>
+    <tspan x="968" dy="21" font-weight="700">K = max(Kx, Ky)</tspan>
+  </text>
+
+  <path class="arrow" d="M298 570 H338"/>
+  <path class="arrow" d="M598 570 H638"/>
+  <path class="arrow" d="M898 570 H938"/>
+
+  <line x1="48" y1="704" x2="1152" y2="704" stroke="#d5dee5" stroke-width="1.5"/>
+  <text class="small" x="48" y="739">Repeat over the day: 00-03, 03-06, 06-09, 09-12, 12-15, 15-18, 18-21, and 21-24 UTC.</text>
+  <text class="small" x="48" y="767">Monthly SQ refinement uses X/Y/Z; K classification uses horizontal components X and Y.</text>
+</svg>

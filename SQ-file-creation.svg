@@ -1,0 +1,136 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="1200" height="940" viewBox="0 0 1200 940" role="img" aria-labelledby="title description">
+  <title id="title">How the 24-hour SQ file is created</title>
+  <desc id="description">A two-pass process filters one-second samples against an interpolated SQ curve, groups quiet observations by hour, takes X, Y, and Z medians (or means) for each of 24 hours, and refines the file using a 10 nT threshold.</desc>
+  <defs>
+    <marker id="arrow" markerWidth="10" markerHeight="10" refX="8" refY="5" orient="auto">
+      <path d="M0 0 L10 5 L0 10 Z" fill="#526579"/>
+    </marker>
+    <style>
+      text { font-family: Arial, Helvetica, sans-serif; fill: #183044; }
+      .title { font-size: 30px; font-weight: 700; }
+      .subtitle { font-size: 16px; fill: #526579; }
+      .section { font-size: 18px; font-weight: 700; }
+      .box-title { font-size: 16px; font-weight: 700; }
+      .body { font-size: 14px; fill: #344b5e; }
+      .light, .light tspan { fill: #ffffff; }
+      .small { font-size: 13px; fill: #526579; }
+      .hour { font-size: 14px; font-weight: 700; }
+      .median { font-size: 12px; fill: #526579; }
+      .arrow { fill: none; stroke: #526579; stroke-width: 2.5; marker-end: url(#arrow); }
+    </style>
+  </defs>
+
+  <rect width="1200" height="940" fill="#f5f8fa"/>
+  <text class="title" x="48" y="52">How the 24-hour SQ file is created</text>
+  <text class="subtitle" x="48" y="80">Each hour becomes one row containing median (or mean) X, Y, and Z values</text>
+
+  <text class="section" x="48" y="126">Pass 1: select quiet data with the 100 nT limit</text>
+
+  <rect x="48" y="150" width="200" height="150" rx="10" fill="#e2f2ef" stroke="#178477" stroke-width="2"/>
+  <text class="box-title" x="66" y="182">Previous SQ file</text>
+  <text class="body" x="66" y="213">
+    <tspan x="66" dy="0">24 hourly means for</tspan>
+    <tspan x="66" dy="21">X, Y, and Z</tspan>
+  </text>
+
+  <rect x="278" y="150" width="200" height="150" rx="10" fill="#e2f2ef" stroke="#178477" stroke-width="2"/>
+  <text class="box-title" x="296" y="182">Interpolate</text>
+  <text class="body" x="296" y="213">
+    <tspan x="296" dy="0">Make an SQ estimate</tspan>
+    <tspan x="296" dy="21">for every one-second</tspan>
+    <tspan x="296" dy="21">timestamp</tspan>
+  </text>
+
+  <rect x="508" y="150" width="200" height="150" rx="10" fill="#fff0d9" stroke="#cc791d" stroke-width="2"/>
+  <text class="box-title" x="526" y="182">Filter samples</text>
+  <text class="body" x="526" y="213">
+    <tspan x="526" dy="0">Compare observations</tspan>
+    <tspan x="526" dy="21">with SQ in common</tspan>
+    <tspan x="526" dy="21">units; keep within</tspan>
+    <tspan x="526" dy="21">100 nT</tspan>
+  </text>
+
+  <rect x="738" y="150" width="200" height="150" rx="10" fill="#e6eef7" stroke="#4678a6" stroke-width="2"/>
+  <text class="box-title" x="756" y="182">Group by hour</text>
+  <text class="body" x="756" y="213">
+    <tspan x="756" dy="0">Pool the qualifying</tspan>
+    <tspan x="756" dy="21">X, Y, and Z samples</tspan>
+    <tspan x="756" dy="21">into hour bins 00-23</tspan>
+  </text>
+
+  <rect x="968" y="150" width="200" height="150" rx="10" fill="#e6eef7" stroke="#4678a6" stroke-width="2"/>
+  <text class="box-title" x="986" y="182">Hourly median/mean</text>
+  <text class="body" x="986" y="213">
+    <tspan x="986" dy="0">For each hour, take</tspan>
+    <tspan x="986" dy="21">median (or mean) of</tspan>
+    <tspan x="986" dy="21">X, Y, and Z</tspan>
+  </text>
+
+  <path class="arrow" d="M248 225 H268"/>
+  <path class="arrow" d="M478 225 H498"/>
+  <path class="arrow" d="M708 225 H728"/>
+  <path class="arrow" d="M938 225 H958"/>
+
+  <text class="section" x="48" y="346">The intermediate SQ file has 24 hourly rows</text>
+  <text class="small" x="48" y="370">Each cell represents one row: hour, median (or mean) X, Y, and Z (values in pT).</text>
+
+  <g fill="#ffffff" stroke="#9ab4c3" stroke-width="1.5">
+    <rect x="48" y="392" width="130" height="48" rx="6"/><rect x="188" y="392" width="130" height="48" rx="6"/><rect x="328" y="392" width="130" height="48" rx="6"/><rect x="468" y="392" width="130" height="48" rx="6"/><rect x="608" y="392" width="130" height="48" rx="6"/><rect x="748" y="392" width="130" height="48" rx="6"/><rect x="888" y="392" width="130" height="48" rx="6"/><rect x="1028" y="392" width="130" height="48" rx="6"/>
+    <rect x="48" y="450" width="130" height="48" rx="6"/><rect x="188" y="450" width="130" height="48" rx="6"/><rect x="328" y="450" width="130" height="48" rx="6"/><rect x="468" y="450" width="130" height="48" rx="6"/><rect x="608" y="450" width="130" height="48" rx="6"/><rect x="748" y="450" width="130" height="48" rx="6"/><rect x="888" y="450" width="130" height="48" rx="6"/><rect x="1028" y="450" width="130" height="48" rx="6"/>
+    <rect x="48" y="508" width="130" height="48" rx="6"/><rect x="188" y="508" width="130" height="48" rx="6"/><rect x="328" y="508" width="130" height="48" rx="6"/><rect x="468" y="508" width="130" height="48" rx="6"/><rect x="608" y="508" width="130" height="48" rx="6"/><rect x="748" y="508" width="130" height="48" rx="6"/><rect x="888" y="508" width="130" height="48" rx="6"/><rect x="1028" y="508" width="130" height="48" rx="6"/>
+  </g>
+  <g text-anchor="middle">
+    <g class="hour">
+      <text x="113" y="412">00 hour</text><text x="253" y="412">01 hour</text><text x="393" y="412">02 hour</text><text x="533" y="412">03 hour</text><text x="673" y="412">04 hour</text><text x="813" y="412">05 hour</text><text x="953" y="412">06 hour</text><text x="1093" y="412">07 hour</text>
+      <text x="113" y="470">08 hour</text><text x="253" y="470">09 hour</text><text x="393" y="470">10 hour</text><text x="533" y="470">11 hour</text><text x="673" y="470">12 hour</text><text x="813" y="470">13 hour</text><text x="953" y="470">14 hour</text><text x="1093" y="470">15 hour</text>
+      <text x="113" y="528">16 hour</text><text x="253" y="528">17 hour</text><text x="393" y="528">18 hour</text><text x="533" y="528">19 hour</text><text x="673" y="528">20 hour</text><text x="813" y="528">21 hour</text><text x="953" y="528">22 hour</text><text x="1093" y="528">23 hour</text>
+    </g>
+    <g class="median">
+      <text x="113" y="431">X / Y / Z values</text><text x="253" y="431">X / Y / Z values</text><text x="393" y="431">X / Y / Z values</text><text x="533" y="431">X / Y / Z values</text><text x="673" y="431">X / Y / Z values</text><text x="813" y="431">X / Y / Z values</text><text x="953" y="431">X / Y / Z values</text><text x="1093" y="431">X / Y / Z values</text>
+      <text x="113" y="489">X / Y / Z values</text><text x="253" y="489">X / Y / Z values</text><text x="393" y="489">X / Y / Z values</text><text x="533" y="489">X / Y / Z values</text><text x="673" y="489">X / Y / Z values</text><text x="813" y="489">X / Y / Z values</text><text x="953" y="489">X / Y / Z values</text><text x="1093" y="489">X / Y / Z values</text>
+      <text x="113" y="547">X / Y / Z values</text><text x="253" y="547">X / Y / Z values</text><text x="393" y="547">X / Y / Z values</text><text x="533" y="547">X / Y / Z values</text><text x="673" y="547">X / Y / Z values</text><text x="813" y="547">X / Y / Z values</text><text x="953" y="547">X / Y / Z values</text><text x="1093" y="547">X / Y / Z values</text>
+    </g>
+  </g>
+
+  <text class="section" x="48" y="616">Pass 2: refine the file with the 10 nT limit</text>
+
+  <rect x="48" y="640" width="220" height="142" rx="10" fill="#e2f2ef" stroke="#178477" stroke-width="2"/>
+  <text class="box-title" x="66" y="672">Interpolate again</text>
+  <text class="body" x="66" y="703">
+    <tspan x="66" dy="0">Use the intermediate</tspan>
+    <tspan x="66" dy="21">24-hour curve to get</tspan>
+    <tspan x="66" dy="21">one SQ per second</tspan>
+  </text>
+
+  <rect x="342" y="640" width="220" height="142" rx="10" fill="#fff0d9" stroke="#cc791d" stroke-width="2"/>
+  <text class="box-title" x="360" y="672">Filter more tightly</text>
+  <text class="body" x="360" y="703">
+    <tspan x="360" dy="0">Keep quiet samples</tspan>
+    <tspan x="360" dy="21">within 10 nT of</tspan>
+    <tspan x="360" dy="21">interpolated SQ</tspan>
+  </text>
+
+  <rect x="636" y="640" width="220" height="142" rx="10" fill="#e6eef7" stroke="#4678a6" stroke-width="2"/>
+  <text class="box-title" x="654" y="672">Recompute hourly SQ</text>
+  <text class="body" x="654" y="703">
+    <tspan x="654" dy="0">Group by hour and take</tspan>
+    <tspan x="654" dy="21">X/Y/Z median (or mean)</tspan>
+    <tspan x="654" dy="21">again for all 24 hours</tspan>
+  </text>
+
+  <rect x="930" y="640" width="220" height="142" rx="10" fill="#173d52" stroke="#173d52" stroke-width="2"/>
+  <text class="box-title light" x="948" y="672">Final SQ file</text>
+  <text class="body light" x="948" y="703">
+    <tspan x="948" dy="0">24 rows x 3 values</tspan>
+    <tspan x="948" dy="21">Use for next month</tspan>
+    <tspan x="948" dy="21">and later K calculations</tspan>
+  </text>
+
+  <path class="arrow" d="M268 711 H332"/>
+  <path class="arrow" d="M562 711 H626"/>
+  <path class="arrow" d="M856 711 H920"/>
+
+  <rect x="48" y="820" width="1104" height="72" rx="8" fill="#ffffff" stroke="#9aaaba" stroke-width="1.5" stroke-dasharray="6 5"/>
+  <text class="box-title" x="68" y="850">No previous SQ file?</text>
+  <text class="body" x="68" y="875">Create a provisional seed from quiet days using the bootstrap procedure, then start with Pass 1.</text>
+</svg>
