@@ -420,10 +420,10 @@ def main() -> int:
         formatter_class=argparse.RawDescriptionHelpFormatter,
         epilog=(
             "Examples:\n"
-            "  Bootstrap SQ and save it: python calculate_ih_k_index.py WIC/WIC23DEC.BIN --sq-output WIC/202312WICsq\n"
-            "  Use an SQ file: python calculate_ih_k_index.py WIC/WIC23DEC.BIN --sq-input WIC/202311WICsq\n"
-            "  Use IAGA 1-second data: python calculate_ih_k_index.py KIR/kir202609qsec.sec.gz --input-format iaga --sq-input KIR/202310KIRsq --k9-limit 1500\n"
-            "  Set K9 to 500 nT: python calculate_ih_k_index.py WIC/WIC23DEC.BIN --k9-limit 500\n\n"
+            "  Bootstrap SQ and save it: python calculate_k_index.py WIC/WIC23DEC.BIN --sq-output WIC/202312WICsq\n"
+            "  Use an SQ file: python calculate_k_index.py WIC/WIC23DEC.BIN --sq-input WIC/202311WICsq\n"
+            "  Use IAGA 1-second data: python calculate_k_index.py KIR/kir202609qsec.sec.gz --input-format iaga --sq-input KIR/202310KIRsq --k9-limit 1500\n"
+            "  Set K9 to 500 nT: python calculate_k_index.py WIC/WIC23DEC.BIN --k9-limit 500\n\n"
             "SQ files contain 24 rows of X, Y, Z values in pT. Plain-text and gzip/bzip2/xz-\n"
             "compressed IAGA files are supported. IAGA input requires an SQ source\n"
             "and --k9-limit because neither value is supplied by the data file. The positional\n"
@@ -438,6 +438,12 @@ def main() -> int:
         default="iaf",
         help="input format (default: iaf)",
     )
+    parser.add_argument("--method", choices=("ih", "fmi"), default="ih",
+                        help="K-index method (default: ih); FMI requires a C compiler")
+    parser.add_argument("--longitude", type=float,
+                        help="observatory longitude in degrees east (FMI; defaults to IAF header)")
+    parser.add_argument("--context-file", type=Path, action="append", default=[],
+                        help="additional same-station input file for FMI adjacent-day context; repeatable")
     parser.add_argument("--sq-input", type=Path, help="existing 24-row SQ file in pT")
     parser.add_argument("--sq-output", type=Path, help="write the SQ curve used by this run in pT")
     parser.add_argument(
@@ -480,7 +486,8 @@ def main() -> int:
     if args.sq_input and args.sq_file:
         parser.error("use either --sq-input or the positional SQ file, not both")
     if (
-        args.input_format == "iaga"
+        args.method == "ih"
+        and args.input_format == "iaga"
         and not args.sq_input
         and not args.sq_file
         and not args.bootstrap_file
@@ -494,49 +501,91 @@ def main() -> int:
     ):
         parser.error("SQ output must use a different path from K-index outputs")
 
+    if args.method == "fmi":
+        inputs = [args.input_file.resolve(), *(p.resolve() for p in args.context_file)]
+        if any(p and p.resolve() in inputs for p in (args.output, args.comprehensive_output)):
+            parser.error("FMI outputs must not overwrite input or context files")
     try:
-        records = parse_month_file(args.input_file) if args.input_format == "iaf" else None
-        sq_input = args.sq_input or args.sq_file
-        bootstrap_path: Path | None = None
-        if sq_input:
-            sq = read_sq_curve(sq_input)
-            bootstrap_description = f"SQ file {sq_input}"
-        else:
-            bootstrap_path = args.bootstrap_file or args.input_file
-            if records is not None and bootstrap_path.resolve() == args.input_file.resolve():
-                bootstrap_records = records
+        if args.method == "fmi":
+            import calculate_fmi_k_index as fmi
+            if args.sq_input or args.sq_file or args.sq_output or args.bootstrap_file:
+                parser.error("FMI fits its own daily quiet curve; SQ input/output and bootstrap files apply to IH")
+            if args.input_format == "iaga" and args.longitude is None:
+                parser.error("--longitude is required for FMI with IAGA input")
+            if args.input_format == "iaf":
+                records = parse_month_file(args.input_file)
+                days = fmi.iaf_days(records)
             else:
-                bootstrap_records = parse_month_file(bootstrap_path)
-            sq, quiet_days = bootstrap_sq_curve(
-                bootstrap_records, args.bootstrap_days, estimator=args.sq_estimator
-            )
+                days = fmi.iaga_days(args.input_file)
+            targets = list(days)
+            for context_path in args.context_file:
+                context = (fmi.iaf_days(parse_month_file(context_path))
+                           if args.input_format == "iaf" else fmi.iaga_days(context_path))
+                if args.input_format == "iaf":
+                    identity = next(iter(days.values()))[2]
+                    if any((data[2][0], data[2][2], data[2][3]) !=
+                           (identity[0], identity[2], identity[3]) for data in context.values()):
+                        raise ValueError("FMI context must belong to the same station and coordinates")
+                for day, data in context.items():
+                    if day in days and days[day] != data:
+                        raise ValueError(f"conflicting FMI context for {day}")
+                    days[day] = data
+            rows = fmi.calculate_days(days, targets,
+                step=60 if args.input_format == "iaf" else 1,
+                k9_nT=args.k9_limit, longitude=args.longitude,
+                minimum_coverage=args.minimum_coverage)
+            processed_days = len(targets)
+            from datetime import timedelta
+            missing_context = sum(any(day + timedelta(days=n) not in days for n in (-1, 1))
+                                  for day in targets)
             bootstrap_description = (
-                f"bootstrapped SQ ({args.sq_estimator}) from {bootstrap_path} using {len(quiet_days)} quiet days: "
-                f"{', '.join(quiet_days)}"
+                f"FMI method; {missing_context} day(s) unavailable due to missing adjacent-day context"
             )
-        if args.sq_output and args.sq_output.resolve() == args.input_file.resolve():
-            parser.error("SQ output must not overwrite the input file")
-        if args.sq_output and bootstrap_path and args.sq_output.resolve() == bootstrap_path.resolve():
-            parser.error("SQ output must not overwrite the IAF bootstrap file")
-        if args.input_format == "iaga":
-            rows = []
-            processed_days = 0
-            for day, samples in iter_iaga_days(args.input_file):
-                rows.extend(
-                    calculate_iaga_day(
-                        day, samples, sq, args.minimum_coverage, args.k9_limit
-                    )
-                )
-                processed_days += 1
         else:
-            rows = [
-                row
-                for record in records
-                for row in calculate_day(
-                    record, sq, args.minimum_coverage, k9_override_nT=args.k9_limit
+            if args.context_file or args.longitude is not None:
+                parser.error("--context-file and --longitude apply to --method fmi")
+            records = parse_month_file(args.input_file) if args.input_format == "iaf" else None
+            sq_input = args.sq_input or args.sq_file
+            bootstrap_path: Path | None = None
+            if sq_input:
+                sq = read_sq_curve(sq_input)
+                bootstrap_description = f"SQ file {sq_input}"
+            else:
+                bootstrap_path = args.bootstrap_file or args.input_file
+                if records is not None and bootstrap_path.resolve() == args.input_file.resolve():
+                    bootstrap_records = records
+                else:
+                    bootstrap_records = parse_month_file(bootstrap_path)
+                sq, quiet_days = bootstrap_sq_curve(
+                    bootstrap_records, args.bootstrap_days, estimator=args.sq_estimator
                 )
-            ]
-            processed_days = len(records)
+                bootstrap_description = (
+                    f"bootstrapped SQ ({args.sq_estimator}) from {bootstrap_path} using {len(quiet_days)} quiet days: "
+                    f"{', '.join(quiet_days)}"
+                )
+            if args.sq_output and args.sq_output.resolve() == args.input_file.resolve():
+                parser.error("SQ output must not overwrite the input file")
+            if args.sq_output and bootstrap_path and args.sq_output.resolve() == bootstrap_path.resolve():
+                parser.error("SQ output must not overwrite the IAF bootstrap file")
+            if args.input_format == "iaga":
+                rows = []
+                processed_days = 0
+                for day, samples in iter_iaga_days(args.input_file):
+                    rows.extend(
+                        calculate_iaga_day(
+                            day, samples, sq, args.minimum_coverage, args.k9_limit
+                        )
+                    )
+                    processed_days += 1
+            else:
+                rows = [
+                    row
+                    for record in records
+                    for row in calculate_day(
+                        record, sq, args.minimum_coverage, k9_override_nT=args.k9_limit
+                    )
+                ]
+                processed_days = len(records)
     except (OSError, ValueError, struct.error) as error:
         parser.error(str(error))
 

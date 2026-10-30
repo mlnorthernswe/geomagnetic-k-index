@@ -16,7 +16,7 @@ from dataclasses import dataclass
 from datetime import datetime
 from pathlib import Path
 
-import calculate_ih_k_index as ih
+import calculate_k_index as ih
 
 
 @dataclass(frozen=True)
@@ -87,6 +87,7 @@ def run_station_pipeline(
     estimator_override: str | None = None,
     save_generated_sq: bool = False,
     dry_run: bool = False,
+    method_override: str | None = None,
 ) -> list[MonthRunSummary]:
     station_code = station.upper()
     station_dir = base_dir / str(station_cfg.get("directory", station_code))
@@ -109,6 +110,14 @@ def run_station_pipeline(
     k9_limit = float(k9_limit_raw) if k9_limit_raw is not None else None
 
     months = discover_station_months(station_code, station_dir)
+    method = str(method_override or station_cfg.get("method") or defaults.get("method", "ih"))
+    if method not in ("ih", "fmi"):
+        raise ValueError(f"unknown K-index method: {method}")
+    if method == "fmi":
+        if save_generated_sq:
+            raise ValueError("--save-generated-sq applies to IH; FMI fits a daily quiet curve")
+        return run_fmi_months(months, target_dir, k9_limit, minimum_coverage,
+                              station_cfg.get("longitude", defaults.get("longitude")), dry_run)
     generated_sq_cache: dict[str, tuple[dict[str, tuple[float, ...]], str]] = {}
     summaries: list[MonthRunSummary] = []
 
@@ -201,6 +210,43 @@ def run_station_pipeline(
     return summaries
 
 
+def run_fmi_months(months, target_dir, k9_limit, minimum_coverage, longitude, dry_run):
+    """Use all available station months as context, without bridging date gaps."""
+    import calculate_fmi_k_index as fmi
+    from datetime import timedelta
+
+    days = fmi.iaf_days([record for month in months for record in month.records])
+    if not days:
+        return []
+    rows = fmi.calculate_days(days, k9_nT=k9_limit,
+        longitude=None if longitude is None else float(longitude),
+        minimum_coverage=minimum_coverage)
+    by_date = {}
+    for row in rows:
+        by_date.setdefault(row["date"], []).append(row)
+    summaries = []
+    for month in months:
+        targets = [datetime.strptime(str(record[1]), "%Y%j").date() for record in month.records]
+        month_rows = [row for day in targets for row in by_date[day.isoformat()]]
+        stem = month.path.stem.upper()
+        csv_path = target_dir / f"{stem}-k-index-FMI.csv"
+        comp_path = target_dir / f"{stem}-comprehensive-FMI.txt"
+        if not dry_run:
+            with csv_path.open("w", newline="", encoding="utf-8") as output:
+                ih.write_csv(month_rows, output)
+            with comp_path.open("w", encoding="ascii", newline="\n") as output:
+                ih.write_comprehensive(month_rows, output)
+        comparisons = [row for row in month_rows if row["matches_stored"] != ""]
+        missing = sum(any(day + timedelta(days=n) not in days for n in (-1, 1)) for day in targets)
+        summaries.append(MonthRunSummary(
+            station=month.station, yyyymm=month.yyyymm, input_path=month.path,
+            sq_source=f"FMI daily fit ({missing}d no context)", days=len(targets),
+            intervals=len(month_rows), matched_intervals=sum(r["matches_stored"] == 1 for r in comparisons),
+            comparable_intervals=len(comparisons), csv_output=csv_path,
+            comprehensive_output=comp_path, sq_output=None))
+    return summaries
+
+
 def load_config(config_path: Path) -> tuple[dict[str, object], dict[str, dict[str, object]]]:
     raw = json.loads(config_path.read_text(encoding="utf-8"))
     defaults = dict(raw.get("defaults", {}))
@@ -244,6 +290,8 @@ def main(argv: list[str] | None = None) -> int:
         action="store_true",
         help="compute and report pipeline steps without writing files",
     )
+    parser.add_argument("--method", choices=("ih", "fmi"),
+                        help="override the K-index method (default: config or ih)")
     args = parser.parse_args(argv)
 
     base_dir = args.config.resolve().parent
@@ -259,19 +307,24 @@ def main(argv: list[str] | None = None) -> int:
         parser.error(f"unknown station(s) {', '.join(unknown)}; available: {', '.join(stations_cfg)}")
 
     all_summaries: list[MonthRunSummary] = []
-    for station in selected_stations:
-        all_summaries.extend(
-            run_station_pipeline(
-                station=station,
-                station_cfg=stations_cfg[station],
-                defaults=defaults,
-                base_dir=base_dir,
-                output_dir=args.output_dir,
-                estimator_override=args.sq_estimator,
-                save_generated_sq=args.save_generated_sq,
-                dry_run=args.dry_run,
+    try:
+        for station in selected_stations:
+            all_summaries.extend(
+                run_station_pipeline(
+                    station=station,
+                    station_cfg=stations_cfg[station],
+                    defaults=defaults,
+                    base_dir=base_dir,
+                    output_dir=args.output_dir,
+                    estimator_override=args.sq_estimator,
+                    save_generated_sq=args.save_generated_sq,
+                    dry_run=args.dry_run,
+                    method_override=args.method,
+                )
             )
-        )
+
+    except (OSError, ValueError) as error:
+        parser.error(str(error))
 
     header = f"{'STA':<5} {'YYYYMM':<7} {'DAYS':>4} {'MATCH':>11} {'PCT':>7}  {'SQ SOURCE':<30} {'CSV OUTPUT'}"
     print(header)

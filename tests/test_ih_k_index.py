@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Automated unit and regression tests for calculate_ih_k_index and run_pipeline."""
+"""Automated unit and regression tests for calculate_k_index and run_pipeline."""
 
 from __future__ import annotations
 
@@ -8,7 +8,7 @@ import tempfile
 import unittest
 from pathlib import Path
 
-import calculate_ih_k_index as ih
+import calculate_k_index as ih
 import run_pipeline as pipeline
 
 

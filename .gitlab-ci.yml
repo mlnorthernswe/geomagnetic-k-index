@@ -9,7 +9,7 @@ default:
 unit-tests:
   stage: test
   script:
-    - python3 -m py_compile calculate_ih_k_index.py run_pipeline.py tests/test_ih_k_index.py
+    - python3 -m py_compile calculate_k_index.py run_pipeline.py tests/test_ih_k_index.py
     - python3 -m unittest discover -s tests -v
 
 k-index-pipeline:

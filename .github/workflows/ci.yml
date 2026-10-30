@@ -21,7 +21,7 @@ jobs:
           python-version: "3.12"
 
       - name: Syntax & bytecode check
-        run: python3 -m py_compile calculate_ih_k_index.py run_pipeline.py tests/test_ih_k_index.py
+        run: python3 -m py_compile calculate_k_index.py run_pipeline.py tests/test_ih_k_index.py
 
       - name: Run unit & regression tests
         run: python3 -m unittest discover -s tests -v
