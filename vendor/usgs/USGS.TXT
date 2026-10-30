@@ -1,0 +1,46 @@
+-----------------------------------------------------------------------------
+
+                              K-index algorithm
+
+                                     by
+
+                                Lanny Wilson
+
+                           U.S. Geological Survey
+
+                            P.O. Box 23456, MS 968
+                             Denver Federal Center
+                               Denver, CO 80032
+
+                  e-mail : lwilson@gldfs.cr.usgs.gov
+                            phone: (+303)-273-8488
+                              fax: (+303)-273-8450
+
+-----------------------------------------------------------------------------
+
+    Method: USGS method
+
+References: Wilson, L.R., "An evaluation of of digitally derived K-indices",
+            J. Geomag. Geoelectr. (1987) 39, 97-109.
+  
+-----------------------------------------------------------------------------
+
+                              Files on diskette:
+
+usgs.zip        Numerous files within directories containing the Fortran
+                source code for the USGS method of computing K-indices,
+                in compressed (by PKZIP version 2.04) format.  To 
+
+                To de-compress usgs.zip use the provided PKUNZIP with the
+                -d option, ie    pkunzip -d usgs
+
+                The file DKTXT.T51 within the compressed file is a
+                WordPerfect document file describing the USGS program.
+
+dktxt.txt       An ASCII text translation of the file DKTXT.T51.  This file 
+                does not contain the figures as in the WordPerfect file and
+                has been jumbled to some extent in the translation.
+
+-----------------------------------------------------------------------------
+                                End of file
+-----------------------------------------------------------------------------

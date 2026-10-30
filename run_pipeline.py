@@ -111,14 +111,18 @@ def run_station_pipeline(
 
     months = discover_station_months(station_code, station_dir)
     method = str(method_override or station_cfg.get("method") or defaults.get("method", "ih"))
-    if method not in ("ih", "fmi", "kasm", "hermanus"):
+    if method not in ("ih", "fmi", "kasm", "hermanus", "usgs"):
         raise ValueError(f"unknown K-index method: {method}")
-    if method in ("fmi", "kasm", "hermanus"):
+    if method in ("fmi", "kasm", "hermanus", "usgs"):
         if save_generated_sq:
-            raise ValueError("--save-generated-sq applies to IH; FMI/KASM/Hermanus fit daily quiet curves")
+            raise ValueError("--save-generated-sq applies to IH; FMI/KASM/Hermanus/USGS fit daily quiet curves")
         return run_adaptive_months(months, target_dir, k9_limit, minimum_coverage,
                               station_cfg.get("longitude", defaults.get("longitude")), dry_run,
                               method=method,
+                              usgs_options={"parameters": ((base_dir / str(station_cfg.get("usgs_parameters", defaults.get("usgs_parameters"))))
+                                   if station_cfg.get("usgs_parameters", defaults.get("usgs_parameters")) else None),
+                                   "nppm": int(station_cfg.get("usgs_mean_minutes", defaults.get("usgs_mean_minutes", 60))),
+                                   "h_reference": station_cfg.get("usgs_h_reference", defaults.get("usgs_h_reference"))},
                               hermanus_options={name: station_cfg.get("hermanus_" + key, defaults.get("hermanus_" + key))
                                   for name, key in (("mu", "mu"), ("qindex", "q_index"), ("qstart", "q_start"),
                                       ("qend", "q_end"), ("qfactor", "q_factor"), ("seed", "seed"))
@@ -217,14 +221,16 @@ def run_station_pipeline(
 
 
 def run_adaptive_months(months, target_dir, k9_limit, minimum_coverage, longitude, dry_run,
-                   method="fmi", smoothing=1.0, hermanus_options=None):
+                   method="fmi", smoothing=1.0, hermanus_options=None, usgs_options=None):
     """Use all available station months as context, without bridging date gaps."""
     if method == "fmi":
         import calculate_fmi_k_index as backend
     elif method == "kasm":
         import calculate_kasm_k_index as backend
-    else:
+    elif method == "hermanus":
         import calculate_hermanus_k_index as backend
+    else:
+        import calculate_usgs_k_index as backend
     from datetime import timedelta
 
     days = backend.iaf_days([record for month in months for record in month.records])
@@ -232,7 +238,8 @@ def run_adaptive_months(months, target_dir, k9_limit, minimum_coverage, longitud
         return []
     options = (dict(longitude=None if longitude is None else float(longitude))
                if method == "fmi" else dict(smoothing=smoothing)
-               if method == "kasm" else (hermanus_options or {}))
+               if method == "kasm" else (hermanus_options or {}) if method == "hermanus"
+               else (usgs_options or {}))
     rows = backend.calculate_days(days, k9_nT=k9_limit,
         minimum_coverage=minimum_coverage, **options)
     by_date = {}
@@ -256,7 +263,9 @@ def run_adaptive_months(months, target_dir, k9_limit, minimum_coverage, longitud
             station=month.station, yyyymm=month.yyyymm, input_path=month.path,
             sq_source=(f"FMI daily fit ({missing}d no context)" if method == "fmi"
                        else f"KASM fit ({missing}d reduced context)" if method == "kasm"
-                       else "Hermanus LRNS single-day fit"), days=len(targets),
+                       else "Hermanus LRNS single-day fit" if method == "hermanus"
+                       else "USGS H/D calibration file" if options.get("parameters") is not None
+                       else "USGS monthly H/D calibration"), days=len(targets),
             intervals=len(month_rows), matched_intervals=sum(r["matches_stored"] == 1 for r in comparisons),
             comparable_intervals=len(comparisons), csv_output=csv_path,
             comprehensive_output=comp_path, sq_output=None))
@@ -306,7 +315,7 @@ def main(argv: list[str] | None = None) -> int:
         action="store_true",
         help="compute and report pipeline steps without writing files",
     )
-    parser.add_argument("--method", choices=("ih", "fmi", "kasm", "hermanus"),
+    parser.add_argument("--method", choices=("ih", "fmi", "kasm", "hermanus", "usgs"),
                         help="override the K-index method (default: config or ih)")
     args = parser.parse_args(argv)
 

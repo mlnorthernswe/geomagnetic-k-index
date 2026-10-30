@@ -1,0 +1,904 @@
+                  The USGS Method of Computing K-indices
+                            Lanny R. Wilson
+                         U.S. Geological Survey
+                         P.O. Box 23456, MS 968
+                         Denver Federal Center
+                           Denver, CO 80032
+
+
+Introduction
+                    The U.S. Geological Survey (USGS) has been producing 
+digital K-indices since 1979.  The
+computer software used for producing digital K-indices was written to simulate the handscaled
+measurement process.  The "Atlas of Indices K", IAGA Bulletin No. 21, P. N. Mayaud, was used
+as a guide for developing and testing the computer algorithm for estimating regular daily
+variation curves.  The USGS method of producing digital K-indices is described in the paper "An
+Evaluation of Digitally Derived K-Indices", J. Geomag. Geoelectr., 39, 1987, by Lanny R. Wilson. 
+The performance of the USGS digital-K algorithm was tested by using the IAGA WG-5 data set
+and was found to be acceptable for computing K-indices by WG-5 in 1990.
+
+Objective and organization of text
+                    The objective of this documentation is to provide the user with the necessary information
+for using the executable software for producing K-indices by the USGS method.  A floppy disk,
+labeled "USGS METHOD", contains the executable code, source code, and miscellaneous files. 
+It is suggested that users create a directory on their Personal Computer's (PC) hard drive then
+copy the contents of the floppy disk to that directory.  The section on portability and input data
+formats should be read before executing USGS programs.  It is recommended that users
+execute programs 1 and 2, using test files provided, to determine whether the code is
+compatible with the user's PC, and to become familiar with the files and programs.  The
+response to program queries in the examples were the same as those used for the WG-5 test. 
+The user may change responses to program queries, and then view the effect using  the
+evaluation program.
+
+Portability
+                    The USGS method source code, was initially written in FORTRAN, for digital data
+processing applications, using Digital Equipment Corporation computers.   The source code was
+downloaded from the USGS National Geomagnetic Information Center (NGIC) MicroVax
+computer to a PC.  Lahey F77L (Revision E), and Graphoria Library, was used to produce the
+executable programs. Few changes in the MicroVax source code were required for PC
+application except for input and output statements.
+                    The hardware used for developing executable programs was an International Business
+Machine compatible 286 PC, with MS-DOS 6.0, a VGA monitor, an 80MB hard drive, and a
+Hewlett Packard Laser Jet III printer.  Graphics files written to disk for printing require printer
+support by GrafPrint (version 1.0).  Input Data Formats
+                    Running data processing tasks generally require a
+large quantity of disk storage for magnetic observatory data. 
+Observatory data files are stored in a NGIC coded binary
+format to reduce storage requirements and to improve input
+and output throughput.
+                    The NGIC coded binary data contains vector and
+scalar data in tenth-units resolution.  The format of the data
+is shown in Figure 1.  The component field values, H, D,  Z,
+and scalar value F, are coded to 16-bit values (HC, DC, ZC,
+and FC) by subtracting constants PYAM(I), from the vector
+and scalar values.  Missing vector or scalar values  are
+coded as 32767.  The "Station ID" is an arbitrary
+2-character identification code that has been assigned to
+each observatory.  The 2-character ID is converted to an inte-
+ger value during coding.  The "Time Stamp" is the year minus
+1970, concatenated with the day of the year.
+                    The OBSY.DAT file contains individual observatory
+parameters for tabular listings, decoding and program
+computations.  The file should be stored in the current
+working directory.   The parameters required for producing
+digital K-indices, are shown in bold face type in Table 1.  In
+the first line, 'BA' is the 2-character observatory identification
+code for the Barrow, Alaska, observatory.  Prefix names,
+ending with a colon, are used to identify parameters.  The
+NGIC binary format uses the previous year's annual means
+(PYAM:) for coding values.  The colatitude and east longitude
+are the coordinates of the observatory (LAT/LON:).   The 3-
+character code is the IAGA identification code for that observatory (IDS).  The equivalent
+amplitude value (EAMP:) is 1.0 for the observatory.  The value is computed by dividing the
+amplitude corresponding to that observatory's lower limit of K=9 by 2500.   Appendix
+'OBSY.DAT', contains parameters for the observatories that were selected by IAGA WG-5 for
+testing digital-K algorithms.
+                    The user's data format for one minute component field data may be stored in a variety
+of formats.  The WDC-A ASCII format has been used for a number of years for storing magnetic
+observatory data.  This format provides H, Z, and F with 1 nT resolution and D with tenth-minute
+resolution.  The INTERMAGNET IMFV1.23 format provides higher resolution for data storage. 
+This format provides F, H, X, Y, or Z with tenth-nT resolution and D with hundredth-minute
+resolution.  Programs WDCUS and IMFMUS have been provided for converting WDC-A and
+IMFV1.23 files to the NGIC binary format.  The
+Appendix includes examples of WDCUS and IMFM-
+US execution and comments on user response to
+program queries.
+
+
+
+
+
+Selection of Mean Values (MVs) for Determining SR curves
+                    MVs are selected from magnetically quiet periods based on the distribution of MVs, their
+upper and lower limits, and the range of 1-minute values for MV samples.  Program SELMVS
+reads an NGIC binary file of 1-minute data and outputs a file of MV parameters.  Program 1, is
+an example run of SELMVS.  The user's responses to queries are shown in bold face type.  The
+numbers on the left of the example correspond to comments below the program. 
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+1.  The path to the input file allows access to another drive or directory.  The filename in theexample includes an extension '.DAT', however and extension is not required.  The first 2
+characters in the filename must match the 2-character observatory ID in file OBSY.DAT. 
+SELMVS produces an output file, in the current working directory, with the same filename as the
+input filename but with the extension '.KAY'.
+2.  The Beginning and Ending date, are the month, day, and year minus 1900.  A 1-monthsample of data is generally large enough to include 10 or more quiet days.
+3.  The USGS method uses a sample of 60 1-minute values for computing each MV.  This is the
+          standard response for computing K-indices for most mid- and high-latitude observatories. 
+          Reducing the number of points per mean will reduce the SR curve smoothing, for a closer
+          fit to short period variation.  Note that the number of minutes per mean must be modulo
+          1440 and must be greater than or equal to 12.
+4.  The default Standard Normal Deviate (SND) for the range of 1-minute values (R1MVs) for MV
+          samples is 1.96.  The SND may be reduced or increased to make the selection of MVs more
+          or less critical.
+5.  The 99% confidence limits for MV selection are computed from the variation of the MVs about
+          their monthly mean.  The default value of SND is 2.576.  Magnetically quiet data with large
+          diurnal variation may require a larger SND.
+6.  The amplitude corresponding to the lower limit of K=5 is used to exclude disturbed range
+          samples from the range distribution before computing confidence limits for the R1MVs.
+7.  The day of the year is defined by concatenating the year minus 1970, with the day of theyear.  The value 15182 represents day 182 and year 1985.
+
+                    The confidence limits for selecting MVs are computed by SELMVS and output in a *.KAY
+file (the asterisk refers to the 1-minute input filename).  The output file (NTU507.KAY), from the
+previous SELMVS example, is show in Table 2.  The column of numbers on the left side of the
+table corresponds to comments following the table. 
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+1. 
+The path and input filename of the 1-minute data file, used by SELMVS, is output for userverification. 
+2.  The number of minute values per mean is output so the user may verify runtime parameters. 
+3.  XD is a constant for converting Declination in minutes of arc to equivalent nanoTesla (nT). 
+          The SV default scale factor values will always be 1.0, for H and D.
+4.  The standard normal deviates for computing MVs and R1MVs confidence limits are listed on
+          the next line for components H and D to verify input to SELMVS.
+5.  The MV frequency distribution table for the H component follows this line.  The number of
+          MV occurrences (1,2,5,...), correspond to the distribution intervals (upper interval limits -844,-
+          713,-582,... in tenth nT).  The average (AV), standard error (SE), mode, and median follow
+          the distribution table.
+6.  The frequency distribution of R1MVs is generally skewed.
+7.  The actual statistics generated for selecting MVs are the 99% confidence limits for MVsand the 95% upper confidence limit for the R1MVs.  The mode of the H distribution (IST) is used
+to preserve SR curve continuity with adjacent days that have missing data.  
+8.  The frequency distributions for MVs and R1MVs and their statistics are repeated for the Dcomponent, as described in 5, 6, and 7 above.  The D integer values are in tenth-minutes.
+9.  Magnetically quiet days have been selected, for the user, based on the daily range of H.  This
+          line contains the range magnitude in tenth-nT.  The next line lists the day of the month
+          corresponding to each day.
+
+                                        The *.KAY file should be compiled monthly to reflect current seasonal changes in
+the Earth's magnetic field.  The confidence limits from the previous month's *.KAY file may be
+used to compute current K-indices.  It is helpful for the user to examine one year of *.KAY files
+to become familiar with distributions and confidence limits for MVs and R1MVs for each
+observatory.  A knowledge of the expected distribution and confidence limits may help the user
+to identify whether a distribution is excessively skewed, due to long periods of high magnetic
+activity, and whether the confidence limits require adjustment.
+                    The confidence limits generated by SELMVS, are used for the selection of MVs for
+estimating SR curves.  Other parameters for selecting MVs and computing confidence limits for
+the SR curve are stored in a *.RUN file.  This file reduces the number of user responses to
+program queries and maintains a log of the parameters used in computing K-indices.  A *.RUN
+file is shown in Table 3.  Parameters that may be changed by the user are shown in bold faced
+type.  The numbers on the left side of the file correspond to comments below the table.
+1.  The DATA TYPE will always be zero.  NGIC data processing uses this parameter for special
+          applications.
+2.  The 'Number of points per mean', is the number of 1-minute values used to compute each
+          MV. 
+3.  The SR curve is estimated by fitting a cubic spline to the intercept points of a series of line
+          segments.  The line segments are defined by a least squares fit to a sliding set of
+          consecutive MVs.  The example *.RUN file will request that a sliding set of 3 MVs be used
+          for fitting line segments.  Figure 2, shows the change in SR smoothing using different values
+          for 'minute values per mean' and 'mean values per segment'.  The least number of means
+          per segment permitted is 3.  More than 5 means per segment will generally produce
+          excessive SR curve smoothing.
+4.  The confidence limits computed for a SR curve can be varied by 3-hour period by changing
+          the SND values in this row.  The first SND of each row corresponds to the first 3-hour period,
+          the last SND to the 8th 3-hour period.  The amplitude is the range of 1-minute values about
+          the SR curve during a 3-hour period.  If the difference between a 3-hour range of variation
+          and the amplitude is significantly greater than zero, based on the confidence limits of the SR
+          curve (SE SRC), the program selects the amplitude; otherwise the range is selected.  If the
+          SR curve adjustment to 1-minute data is significantly greater than zero, based on the
+          confidence limits of the adjustment (SE ADJ), and the adjustment is less than 95% of the
+          amplitude, then the program applies the adjustment to the amplitude. 
+5.  The same control is used for the D component.  A flow chart showing the logic used inchoosing the range or amplitude has been included in the Appendix SMALL AMPLITUDE
+ADJUSTMENTS.
+6.  The confidence limits                                                       for rejecting MVs, may be computed from user selected nighttime
+                                                                                ranges.  The time interval is entered as well as the expected night-
+                                                                                time range, if 'Y' is chosen.  The nighttime ranges, for
+          1-minute variation
+          during 1-hour peri-
+          ods, are entered for
+          H (nT) and D (min-
+          utes).
+7.  The response willalways be 'N', this is a
+debug switch for testing
+source code.
+8.  The user has theoption of writing a file to
+disk for graphically test-
+ing the performance of
+the USGS method.
+9.  This response is used
+to designate that the
+values in the K-index
+table are preliminary.
+
+Computation of K-
+indices
+                    Program USGSDK
+uses parameter from the
+*.KAY and *.RUN files to estimate SR curves and compute amplitudes.  An example run of
+USGSDK is shown as Program 2.  The user's responses to queries are shown in bold faced
+type.  The numbers on the left side of the example correspond to comments below the example.
+
+
+
+
+
+
+
+
+
+
+1.  The first two characters in the filename must match the 2-character ID used for thatobservatory in the OBSY.DAT file.
+2.  The Beginning and Ending dates define the interval of data to be processed.
+3.  The confidence limits, for MVs and R1MVs, are read from file NTU507.KAY.
+
+                    The USGSDK program outputs a K-indices table in file *.DKA; a *.CLN file showing the
+MVs that were rejected as disturbed; a *.DIG file for the user's examination and for graphics
+application; and an optional binary *.CRV file for producing graphs of the daily SR curve and
+component variation.  These output files are written to the current working directory.
+
+                    The K-index table for Newport, Washington, is shown in Table 4.  The statement
+'PRELIMINARY K VALUES' can be removed by changing the response from 'Y' to 'N' on line
+9 of the file NTU507.RUN.  Note that the K-indices are decimal values.  The minimum value is
+0.0 and the maximum value possible is 9.9.  The tenth-units are obtained by logarithmic
+interpolation.  Missing data are denoted by values of '99.9' or '999'.  The daily sum of K-indices
+and AK are listed under the column heading KSUM and AK, respectively.  Their values are
+computed from the truncated K-indices.  
+
+                    Table 5, shows a portion of a *.CLN file.  The numbers on the left side of the table
+correspond to comments below the table.
+
+1.  Confidence limits are listed to enable the user to verify the parameters input to USGSDK.
+2.  A list of the magnitudes of magnetically quiet days is useful for checking the MV selectionprocess.
+3.  The processed date is denoted by the year minus 1970, concatenated with the day of the
+          year.
+4.  Each five-digit number identifies deleted MVs by: the component (H=1, D=2); samplenumber of the day (001,002,...120); and the cause of deletion (1,2,or 3).  If the deletion value is
+1 it indicates that range of 1-minute sample values exceeded the confidence limits for nighttime
+ranges; if the value is 2 then the R1MV value was larger than the confidence limits for R1MVs;
+and if the value is 3 then the MV exceeded the MV confidence limits.  So, number '10012'
+indicates that the first H sample of the fourth day was rejected because the R1MV value
+exceeded the 95% confidence limits for the R1MVs.
+
+                    The *.DIG files contain information that was generated during the computation of K-
+indices.  A portion of the NTU507.DIG file is shown in Table 6.  The first row of numbers, in bold
+face type, corresponds to comments on each column in the table.  Rows 2 through 9
+correspond to UT periods 1 through 8 for that day.
+1.  The date 15182, is day 182 of year 1985.                                                                                                
+2.  The amplitude for the first 3-hour period of the
+          day is 51 nT.
+3.  The estimated standard error of the SR curveduring the first period is 2.8 nT.
+4.  The estimated possible error in computing the
+          amplitude from 1-minute averages instead of
+          point values.  The reliability of the magnitude of
+          possible error is unknown.  However, the
+          minus sign indicates that the D component was
+          selected for maximum amplitude.
+5.  The range of the SR curve, between the maximum and minimum deviations, of 1-minutevalues, from the SR curve, is 14 nT.
+6.  The 3-hour range of variation corresponding to the component used for amplitude of non-regular variation is 87 nT.
+
+Evaluation of the USGS method                                                                                           
+                    A program has been provided to visually examine SR curves and computed K-indices. 
+Program 3, is an example of the execution of program DKPLOT.  The user's response to queries
+is shown in bold type.  The column of numbers to the left of the example corresponds to
+comments following the table.                                                                       
+
+
+
+
+
+
+
+
+
+1.  The ASCII file of handscaled K-indices, provided by WG-5, are for the time interval 1-MAR-85
+          and 28-FEB-86. The user should compile a file of handscaled K-indices for several months
+          of data, for each observatory, in the WG-5 format, for evaluating computed K-indices.  An
+          example of the handscaled data format may be found in  appendix HANDSCALED.
+2.  DKPLOT has the option of plotting only selected days from a file of 1-minute data.  The *.LST
+          file is a list of days to be plotted.  Table 7, shows the format of a *.LST file.  The last value
+          '999' is used for program control.
+3.  The user may elect to write a graphics file to disk for laser printing by entering 'Y'.
+
+
+          
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+                                                                                                                                                                                                                                                                The
+Ne
+wp
+ort,
+Wa
+s-
+hin
+gto
+n
+(3-
+cha
+ract
+er
+ide
+ntification
+NEW), 2-
+component
+magnetogram for 1-JUL-85, is shown in Figure 2.  The smooth SRC curves are shown
+superimposed on the component traces H and D, will appear green on the monitor.  The time
+scale, in 3-hour intervals of UT, is listed below each trace.  The bar scale, to the left of each
+rectangle, shows the magnitude of variation. The location of each column of 4 numbers depends
+on the component used for computing the K-index.  The values in the column of numbers are
+defined as follows, from top to bottom:
+1.  The estimated standard error of the SR curve is listed for that period.
+2.  The K-index value is computed from the range of 1-minute values during a 3-hour period,using data from file NTU507.DAT.
+3.  The computed K-index value has been extracted from file NTU507.DKA.  If the difference in
+          the computed K-index minus the handscaled K-index is greater than zero, the column of
+          numbers is shown in red.
+4.  The handscaled K-index value has been extracted from file NT8586.KAY.
+
+                    Program DKPLOT computes the differences, computed-K minus handscaled-K, and
+outputs a difference table, as shown in Table 8.  The differences (K Diff) are listed versus
+magnitude (K=0,1,...,9) and time (Period=1,2,...,8).
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+Summary
+                    The USGS method of computing K-indices includes options for changing the form of the
+SR Curve.  The options are described below:
+1.  The number of 1-minute values used for computing MVs is selected by the user inprogram SELMVS.  The same number should be entered in the *.RUN file for use by program
+USGSDK.  MVs are generally computed from samples of 60 1-minute values.  Smaller samples
+tend to limit SR curve smoothing to shorter periods.
+2.  The number of MVs per segment is also entered in the *.RUN file.  The number of MVs per
+          segment is normally 3, for mid- to high-latitude observatories.  The number may be increased
+          for smoothing the SR curve over longer periods.
+3.  The SNDs for computing the MV and R1MV confidence limits are entered by the user inresponse to SELMVS queries.  Normally the SND for MV confidence limits is 2.58, and 1.96 for
+R1MV confidence limits.  A more critical selection of MVs will be made by reducing the SND
+values used in computing the confidence limits.  The *.CLN file output should be examined; the
+number of MVs deleted and source of deletions may indicate that the confidence limits require
+adjusting.
+4.  A more critical selection of MVs can be made during local nighttime periods by entering 'Y'
+          to the 'SMOOTH NIGHT' query in the *.RUN file.  The range of nighttime variation may be
+          reduced for smoothing the SR curve for select periods.
+
+                    The USGS method also provides options for adjusting K-index computations based on
+the estimated reliability of the SR curve:
+1.  The selection of the amplitude or range for computing K-indices depends on the variability
+          of the SR curve.  The SNDs used to compute the confidence limits for SR curves are input
+          from the *.RUN file by program USGSDK.  Initial evaluation of computed K-indices should
+          be made with the SND values for each of the 8 periods set to 2.58.  The likelihood of the
+          range being selected instead of the amplitude is increased by increasing the value of SND.
+2.  The amplitude may be corrected for excessive SR curve smoothing, during magnetically quiet
+          diurnal periods, by adjusting the fit of the SR curve to the 1-minute component variation.  The
+          SNDs used for computing confidence limits for the adjustment, by program USGSDK, are
+          input from the *.RUN file.  Initially the values of the SND for the 8 periods should be 2.58. 
+          The probability of the adjustment being applied to the amplitude is increased by increasing
+          the SND.
+
+                    If the standard options are used for estimating the SR curve, and the K-index computa-
+tions are not adjusted then the computed K-indices minus handscaled K-indices will generally
+result in 55% or more zero differences.  The number of zero differences may be increased 5 to
+10% by using non-standard SR curve options.  Using the options for adjusting K-index
+computations will generally produce a smaller increase in zero differences.  The DKPLOT routine
+should be run to examine the form of the SR curves, and the distribution of K-differences in the
+K-difference table, to select options that optimize the computation of K-indices.
+
+Acknowlegments
+          I would like to thank the members of IAGA WG V-5 for initiating a program of comparison of
+algorithms for computer determination of K-indices.  Thanks also, to the Finnish Meteorological
+Institute for collecting and disseminating the test data set.  
+                                                                                                                                        Appendix
+                                                                                                                                  HANDSCALED K-INDICES
+
+ 85070142333322                                                                 CHAR(1:2)  = 85, last 2 digits of the year
+ 85070222111111                                                                 CHAR(3:4)  = 07, month of the year
+ 85070322212224                                                                 CHAR(4:5)  = 01, day of the month
+ 85070424435443                                                                 CHAR(7:14) = 42333322, K-indices by period, missing
+ 85070533333223                                                                                       values use '*'                                                                                                                            
+ 85070634442333
+ 85070723324422
+ 85070823323233
+ 85070924311210
+ 85071022221333
+ 85071123333132
+ 85071233444443
+ 85071323354443
+ 85071434433221
+ 85071513232110
+ 85071611111122
+ 85071733244322
+ 85071832333222
+ 85071922133110
+ 85072012212421
+ 85072121232112
+ 85072221221133
+ 85072325423222
+ 85072433332222
+ 85072534331332
+ 85072624332123
+ 85072733434222
+ 85072833232222
+ 85072911101221
+ 85073033334222
+ 85073112455424                                                                                                                                        Appendix
+                                                                                                                                         IMFMUS
+
+     Program IMFMUS is used to convert the INTERMAGNET IMFV1.23 format to the NGIC binary
+1-minute data format.  An example run of IMFMUS is shown below. User input is indicated by
+bold faced type.  The numbers on the left side correspond to comments on user input.
+
+
+
+
+
+
+
+
+
+
+
+
+
+1.  Enter the input path and filename to an INTERMAGNET IMFV1.23 ASCII file of 1-minute data. 
+          The first two characters of the input filename must match the 2-character observatory
+          identification code used for that observatory in file OBSY.DAT.
+2.  The interval in days that are to be converted is selected by the beginning and ending dates.
+3.  Enter the output path and filename of the NGIC binary file.
+4.  The vector and scalar values of the input file are HDZF, if they are XYZF they will beconverted to HDZF.  
+5.  The 'Data type:' will be reported, adjusted, or definitive.  Reported data, are data that have
+          recently been collected but have not been cleaned or have not had missing data filled. 
+          Adjusted data are reported data that have been cleaned or may have missing data filled.  The
+          definitive  data are adjusted data that have had baseline adjustments to standard applied.
+6.  The 3-character code GOL identifies the source of data as the Geomagnetic InformationNode (GIN) at Golden, Colorado.  GINs are currently located at Edinburgh, Scotland (EDI); Paris,
+France (IPG); Ottawa, and Canada (OTT).
+7.  The days that have been processed are denoted by the year minus 1970, concatenated with
+          the day of the year.  The value 15182 is for day 182 and year 1985.
+
+          The storage space required for a file written in the NGIC binary format, for a 31 day month,
+is shown in the directory below:
+
+          Volume in drive D has no label
+          Volume Serial Number is 16D8-6C69
+          Directory of D:\STDASC
+
+          NTU507   DAT    357244 10-13-92   1:13p                                                                                                                                   = NGIC binary 
+          NTI507   IMF   1463448 04-15-93  11:29a                                                                                                                                   = IMFV1.22 ASCII
+          NTI507   ZIP    235068 04-15-93  11:56a                                                                                                                                   = PKZIP on NTI507.IMF
+                  3 file(s)    2055760 bytes
+                                626688 bytes free
+
+
+
+                                                                                                                                                  Appendix
+                                                                                                                                                   IMFMUS
+                    A portion of an IMFV1.23 ASCII file is shown below:
+
+NEW JUL0185 182 00 HDZF D GOL 04832429  20222
+ 182093   -3990  542860 999999   182068   -3960  542860 999999
+ 182055   -3970  542860 999999   182061   -3990  542860 999999
+ 182074   -3980  542860 999999   182087   -3970  542860 999999
+ 182084   -3990  542860 999999   182074   -3980  542870 999999
+ 182084   -3990  542860 999999   182084   -3990  542870 999999
+ 182093   -3990  542870 999999   182096   -3970  542870 999999
+ 182096   -3970  542870 999999   182096   -3970  542870 999999
+ 182093   -3990  542870 999999   182096   -3970  542880 999999
+ 182125   -3990  542880 999999   182121   -4010  542880 999999
+ 182125   -3990  542880 999999   182121   -4010  542880 999999
+ 182112   -4010  542880 999999   182112   -4010  542880 999999
+ 182071   -4000  542880 999999   182008   -3940  542880 999999
+ 182040   -3940  542880 999999   182030   -3930  542880 999999
+ 182033   -3970  542880 999999   182080   -4000  542880 999999
+ 182108   -4020  542890 999999   182125   -3990  542890 999999
+ 182128   -3980  542900 999999   182147   -3990  542900 999999
+ 182184   -4010  542900 999999   182203   -4030  542910 999999
+ 182222   -4040  542910 999999   182260   -4060  542910 999999
+ 182273   -4050  542920 999999   182285   -4040  542930 999999
+ 182298   -4030  542930 999999   182276   -4040  542940 999999
+ 182285   -4040  542940 999999   182273   -3990  542950 999999
+ 182267   -3970  542950 999999   182236   -3970  542950 999999
+ 182239   -3950  542960 999999   182264   -3930  542960 999999
+ 182281   -3900  542970 999999   182296   -3930  542970 999999
+ 182283   -3940  542980 999999   182353   -3970  542990 999999
+ 182356   -3950  542990 999999   182378   -3940  543000 999999
+ 182359   -3930  543000 999999   182372   -3920  543000 999999
+ 182357   -3890  543010 999999   182338   -3880  543000 999999
+ 182322   -3850  543010 999999   182300   -3850  543010 999999
+ 182297   -3870  543010 999999   182285   -3820  543010 999999
+NEW JUL0185 182 01 HDZF D GOL 04832429  20222
+ 182291   -3840  543010 999999   182253   -3820  543010 999999
+ 182213   -3750  543010 999999   182203   -3750  543010 999999
+ 182147   -3710  543010 999999   182103   -3600  543010 999999
+
+                    Each hour block of data has a record header of 64 characters, including carriage return line feed
+characters.  The format of the record header follows:
+
+IDC_DDDDDDD_DOY_HH_COMP_T_GIN_COLALONG_DECBAS_RRRRRRRRRRRRRRRRCrLf
+  Where:
+
+IDC  is the 3-character IAGA observatory identification code designated for that observatory.  E.g., 
+BOU for Boulder, OTT for Ottawa, LER for Lerwick, etc.,
+
+DDDDDDD  The date is defined by month, day and last two digits of the year.  The date FEB1591 is
+February 15, 1991.
+
+DOY  The day of the year may be 1 through 366.
+
+HH  The GMT time is given as 2-digits, hours 00 through 23.  The first line following the header will
+contain the values corresponding to minute 0 and 1.  The first value of the day file is hour 00 minute
+0.
+
+                                                                                                                                                  Appendix
+                                                                                                                                                   IMFMUS
+COMP  Four characters are used to indicate the field components and the order they are listed, e.g.,
+HDZF, XYZF.
+
+T  One character is used to denote data type: R=Recorded, A=Adjusted, and D=Definitive data.
+
+GIN  Three-letter code for the GIN responsible for processing the observatory data.  EDI (Edinburgh),
+GOL (Golden), OTT (Ottawa), PAR (Paris).
+
+COLALONG  The geographic coordinates of the observatory are given in colatitude and east longitude,
+in tenths of degrees.
+
+DECBAS  The previous year's annual mean value may be used for baseline declination.  The value is
+given in tenth-minutes East (0-216000) declination.  If components are X,Y,Z are used instead of H,D,Z,
+then DECBAS=000000.
+
+RRR..RRR   Reserve 16 bytes of R-characters for future use.
+
+_  The underscore character indicates a space character.
+
+CrLf is used to designate carriage return, line feed characters.
+
+                    Each 1-hour block contains 31 records of 64 characters, including a CrLf at the end of each
+record.  The first record in a block is a header record as described above.  Records 2 through 31
+contain vector and scalar data.  The vector values are represented by 7-digit numbers, including a
+minus sign for negative values.  The scalar value F, is given as an unsigned 6-digit number.  The vector
+and scalar values are separated by a space.  Vector values H, X, Y, or Z have tenth-nanoTesla
+resolution and D has hundredth-minute resolution.
+
+Each data record has 2 minutes of data.
+
+SAAAAAA_SBBBBBB_SCCCCCC_FFFFFF__SAAAAAA_SBBBBBB_SCCCCCC_FFFFFFCrLf
+    (Values for minute 0)            (Values for minute 1)
+....... ....... ....... ......  ....... ....... ....... ......
+....... ....... ....... ......  ....... ....... ....... ......
+....... ....... ....... ......  ....... ....... ....... ......
+....... ....... ....... ......  ....... ....... ....... ......
+SAAAAAA_SBBBBBB_SCCCCCC_FFFFFF__SAAAAAA_SBBBBBB_SCCCCCC_FFFFFFCrLf
+    (Values for minute 58)            (Values for minute 59)
+Where:
+
+S:       Indicates Sign (- or space for +).
+AAAAAA:  Indicates Component value H or X
+BBBBBB:  Indicates Component value D or Y
+CCCCCC:  Indicates Component value Z
+FFFFFF:  Indicates Total Field value
+
+                                                                                                                                                 Appendix
+                                                                                                                                                  OBSY.DAT
+
+AIARGENTINE ISLAND
+PYAM: 21400.0 585.0 -30000.0
+36850
+LAT/LON: 144.1 295.7
+IDS: AIA
+EAMP: 0.2
+BEBELSK, POLAND
+PYAM: 26875.0 2703.0 49005.0
+55890.6
+LAT/LON: 39.8 20.8
+IDS: BEL
+EAMP: 0.18
+CACANBERRA, AUSTRALIA
+PYAM: 23650.0 700.0 -53800.0
+58778.0
+LAT/LON: 133.4 149.4
+IDS: CAN
+EAMP: 0.18
+CZCROZET, INDIAN OCEAN
+PYAM: 16284.0 -2640.0 -33420.0
+37176.1
+LAT/LON: 141.5 51.9
+IDS: CZT
+EAMP: 0.2
+HAHARTLAND, ENGLAND
+NSV:  4.34  1.01  4.59
+FSV: 0.000 0.000 0.000
+PYAM: 19342.0  -444.7 43787.0
+47869.0
+PBX:  00.0  00.0  00.0
+BX:     0     0     0
+BXP: 12.920  5.810 10.750 
+0.000
+BXD: 1 -1 -1 1
+BXM:     0     0     0     0
+XK:  781  182  828 0000
+DECL/INCL: -1  1
+LAT/LON:  39.0 355.5
+IDS: HAD
+OBX:     0     0     0     0
+OSV:  0.0000  0.0000  0.0000
+EAMP: 0.2
+HEHERMANUS, S. AFRICA
+PYAM:1118.1 -1394.0 0.0 0.0
+LAT/LON: 123.7 19.2
+IDS: HER
+EAMP: 0.12
+KEKERGUELEN, INDIAN OCEAN
+PYAM: 18350.0 3120.0 -43700.0
+47396.3
+LAT/LON: 147.4 70.2
+IDS: KGL
+EAMP: 0.3
+MMMEMAMBETSU, JAPAN
+PYAM: 26400.0 -504.3 41455.0
+48147.5
+LAT/LON: 55.5 144.2
+IDS: MMB
+EAMP: 0.14
+NTNEWPORT, WASHINGTON
+NSV:  4.37  1.00  6.50
+FSV: 0.242 0.040 0.252
+PYAM: 18196.0  1213.3 54513.0
+57469.0
+FBX:  10.0  20.0  30.0
+BX: 18150  1140 54100
+BXP: 2.250 17.800  9.200  0.000
+BXD: 1 -1 1 1
+BXM:  1000  -540  -270  3000
+XK:  787  180 1170 0000
+DECL/INCL:  1  1
+LAT/LON:  41.7 242.9
+IDS: NEW
+OBX:   -50  -500  -450     0
+OSV:  0.1000  0.0193  0.1009
+EAMP: 0.28
+NUNUMIJARVI, FINLAND
+PYAM: 15125.9 264.0 49117.0
+59393.3
+LAT/LON: 32.3 24.7
+IDS: NUR
+EAMP: 0.3
+OTOTTAWA, CANADA
+PYAM: 16400.0 -180.0 54125.0
+56559.0
+LAT/LON: 33.4 284.5
+IDS: OTT
+EAMP: 1.333
+SOSODANKYLA, FINLAND
+PYAM: 11800.0 403.1 50700.0
+52055.0
+LAT/LON: 26.4 266.6
+IDS: SOD
+EAMP: 0.6
+                                                                                                                                                 Appendix
+                                                                                                                                         SMALL AMPLITUDE ADJUSTMENTS
+
+
+       ÚÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄ¿                    ÚÄÄÄÄÄÄÄÄÄÄÄ¿   
+ A     ³ RANGE < AMPLITUDE ÃÄÄÄÄÄÄÄþTRUEþÄÄÄÂÄÄÄ´ USE RANGE ³
+       ÀÄÄÄÄÄÄÄÄÂÄÄÄÄÄÄÄÄÄÄÙ                ³   ÀÄÄÄÄÄÄÄÄÄÄÄÙ
+                ³                           ³
+               FALSE                        ³
+                ³                           ³
+      ÚÄÄÄÄÄÄÄÄÄÁÄÄÄÄÄÄÄÄÄÄÄÄÄ¿             ³
+      ³ RANGE MINUS AMPLITUDE ³             ³
+ B    ³ LESS THAN ERROR OF    ÃÄÄÄÄþTRUEþÄÄÄ´
+      ³ SR CURVE              ³             ³                               
+      ÀÄÄÄÄÄÄÄÄÄÂÄÄÄÄÄÄÄÄÄÄÄÄÄÙ             ³
+                ³                           ³
+                ³                           ³
+               FALSE                        ³
+                ³                           ³
+                ³                           ³
+      ÚÄÄÄÄÄÄÄÄÄÁÄÄÄÄÄÄÄÄÄÄÄ¿               ³
+ C    ³ AMPLITUDE LESS THAN ÃÄÄÄÄÄÄþTRUEþÄÄÄÙ
+      ³ ERROR OF SR CURVE   ³               
+      ÀÄÄÄÄÄÄÄÄÄÂÄÄÄÄÄÄÄÄÄÄÄÙ                                               
+                ³                           
+                ³                           
+              FALSE                                                         
+                ³
+                ³      
+      ÚÄÄÄÄÄÄÄÄÄÁÄÄÄÄÄÄÄÄ¿
+      ³ AMPLITUDE MINUS  ³                    ÚÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄ¿
+ D    ³ ADJUSTMENT LESS  ÃÄÄÄÄÄÄÄþTRUEþÄÄÄÄÄÄÄ´  USE AMPLITUDE ³
+      ³ THAN ERROR OF    ³                    ÀÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÙ
+      ³ ADJUSTMENT       ³                    
+      ÀÄÄÄÄÄÄÄÄÄÂÄÄÄÄÄÄÄÄÙ
+                þ
+              FALSE
+                ³
+      ÚÄÄÄÄÄÄÄÄÄÁÄÄÄÄÄÄÄÄÄÄÄÄÄÄ¿ 
+      ³ USE ADJUSTED AMPLITUDE ³
+      ÀÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÙ        
+
+A.  The range should always be greater than or equal to the amplitude.  Oscillations of the SR curve
+          caused by the cubic spline fit can bias the amplitude.
+B.  The SR curve may follow smooth secondary component variation during magnetically quiet nighttime
+          hours.  If the uncertainty of the SR curve is large relative to the possible K-variation, use the range. 
+          Increasing the Standard Normal Deviate (SND) used for computing the confidence limits of the SR
+          curve, during a nighttime period, increases the probability of the range being used instead of the
+          amplitude.
+C.  If the amplitude for a magnetically quiet period is small relative to the possible error of the SR curve,
+          the range is selected instead of the amplitude.  Increase the SND for the SR curve confidence limits
+          to increase the probability of the range being selected.                                                                               Appendix
+                                                                                                                                         SMALL AMPLITUDE ADJUSTMENTS
+
+D.  The SR curve may be too smooth during magnetically quiet diurnal periods.  If this is the case, the
+          amplitude may be larger than the amplitude produced by a SR curve that follows the form of the
+          component variation.  An adjustment to the amplitude is computed by doing a linear least square
+          fit to residuals (1-minute component values minus the SR curve).  Decreasing the value of the SND
+          used for computing the confidence limits of the adjustment will increase the likelihood that the
+          adjustment will be subtracted from the amplitude.
+                                                                                                                                                 Appendix
+                                                                                                                                                    WDCUS
+
+
+     Program WDCUS is used to convert ASCII data in the World Data Center (WDC) format to the NGIC
+coded binary 1-minute data format.  A sample run of WDCUS is shown below.  The numbers on the
+left side of the example correspond to comments on user input (bold type).
+
+
+
+
+
+
+
+
+
+
+
+
+
+1.  The first two characters of the filename must correspond to the 2-character observatory ID for that
+          observatory in file OBSY.DAT.
+2.  Enter the interval in days that are to be converted.
+3.  Enter the output path and filename of the NGIC coded binary 1-minute data.
+4.  The user may have inserted a carriage return and line feed after each record, or block, or day of
+          data. The number of characters between carriage return line feeds must be modulo 80.  Zero is
+          used for data without carriage return, line feed characters. 
+5.  Some WDC files have zeros for denoting missing data instead of 9's.  If this is the case, use theresponse 'Y' to accept zeros as dead values.
+6.  The program lists the previous year's annual means of H, D, Z and F for the user's reference.Declination is in minute units.  A minus sign is used to indicate West declination.  The component Z
+may also be negative.  
+7.  The days that have been processed are denoted by the year minus 1970, concatenated with theday of the year.  The value 15182 is for day 182 and year 1985.
+
+                    The storage space required for a file written in the WDC ASCII format, without carriage return
+and line feed characters, for a 31 day month, is shown in the directory below:
+
+           Volume in drive D has no label
+           Volume Serial Number is 16D8-6C69
+           Directory of D:\ASCSTD
+
+          NTU507          357244 04-16-93  12:19p          =NGIC coded binary
+          NTW507         1190400 04-20-93   1:40p          =WDC ASCII
+                  2 file(s)    1547644 bytes
+                               1851392 bytes free
+                               1851392 bytes free
+                                                                                                                                                 Appendix
+                                                                                                                                                    WDCUS
+
+
+          A sample portion of data in the WDC ASCII format is shown below:
+
+041700242900850701D00NEWGDef       11734 11737 11736 11734 11735 11736 11734 1173
+5 11734 11734 11734 11736 11736 11736 11734 11736 11734 11732 11734 11732 11732 1
+1732 11733 11739 11739 11740 11736 11733 11731 11734 11735 11734 11732 11730 1172
+9 11727 11728 11729 11730 11729 11729 11734 11736 11736 11738 11740 11743 11740 1
+1739 11736 11738 11739 11740 11741 11744 11745 11748 11748 11746 11751 1173504170
+0242900850701D01NEWGDef       11749 11751 11758 11758 11762 11773 11772 11773 117
+79 11783 11786 11787 11789 11788 11789 11792 11785 11781 11781 11779 11778 11779 
+11777 11778 11780 11785 11793 11793 11790 11791 11791 11790 11796 11797 11794 118
+00 11803 11810 11812 11810 11805 11804 11804 11800 11792 11788 11782 11778 11775 
+11772 11774 11771 11765 11764 11774 11786 11795 11800 11804 11810 117850417002429
+00850701D02NEWGDef       11810 11808 11808 11807 11808 11813 11818 11816 11815 11
+813 11816 11815 11809 11810 11813 11810 11808 11804 11803 11805 11808 11810 11811
+ 11810 11808 11806 11805 11805 11804 11805 11804 11800 11797 11793 11791 11789 11
+787 11787 11784 11787 11787 11784 11783 11782 11781 11780 11781 11782 11781 11784
+ 11784 11784 11783 11782 11782 11782 11782 11781 11779 11777 11797041700242900850
+701D03NEWGDef       11776 11773 11773 11777 11775 11776 11776 11776 11776 11778 1
+1775 11776 11777 11778 11779 11779 11782 11782 11782 11785 11785 11786 11786 1178
+6 11786 11786 11784 11782 11784 11782 11782 11784 11786 11786 11787 11785 11785 1
+1786 11783 11786 11786 11788 11788 11789 11790 11790 11789 11790 11789 11787 1178
+8 11790 11791 11791 11792 11793 11794 11797 11797 11799 11784041700242900850701D0
+4NEWGDef       11800 11800 11802 11801 11802 11802 11802 11802 11802 11801 11801 
+11802 11804 11803 11802 11799 11799 11797 11796 11795 11794 11790 11791 11791 117
+92 11791 11791 11792 11795 11794 11791 11787 11786 11787
+
+Logical Record
+                    The logical record length is 400 characters including header information, blank spaces, and data
+for one element for one hour.  Twelve such logical records, containing a total of 4800 coded characters,
+are combined into a single data block on magnetic tape.  There are 12 hours of component data in
+each block, for one observatory.  Therefore, 24 hours of D are followed by 24 hours of the next
+element, in alphabetic order (D,F,H,Z), for the same OBS, YR, MO, DA.  The record format is shown
+below:
+
+ITEM:  NPD LONG YR    MO    DA    E  HR    OBS   ORG (BLANKS) DATA-1 DATA-60 HR-MEAN
+SPACE: 1-6 7-12 13-14 15-16 17-18 19 20-21 22-24 25  26-34    35-40  389-394 395-400
+
+NPD is the observatory's North Polar Distance (0 to 180 degrees) from the north geographic pole in
+thousandths of a degree and is allotted 6 characters.  The decimal point is implied between positions
+3 and 4.
+
+LONG is the geographic longitude (0 to 360 degrees) measured East from Greenwich in thousandths
+of a degree and is allotted 6 characters.  The decimal point is implied between positions 3 and 4.
+
+YR, MO, DA, and HR are 2-digit numbers for the date (last 2 digits of the year, month, and day of the
+month), and the hour in GMT.  
+
+E is the 1-character element symbol,  e.g., D, H, Z, or F.
+
+OBS is the IAGA 3-letter abbreviation for the observatory.
+
+                                                                                                                                                  Appendix
+                                                                                                                                                    WDCUS
+ORG is the origin of the data (G for USGS).
+
+BLANKS are 9 character spaces for future additions.
+
+DATA-1...DATA-60 are 1-minute values of the given element for that data-hour.  H, Z, or F have 1
+nanoTesla resolution, and D has tenth-minute resolution.  (E.g., 612 = 1 degree, 1.2 minutes for D)
+Each element value and hourly mean is given in a six-digit field including a minus sign for negative
+values, or a blank for positive values.  Missing data-value spaces are padded with 99999.  Positive
+values of Declination (D) indicate East Declination, and negative values indicate West Declination.
+
+
+

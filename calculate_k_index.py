@@ -381,7 +381,13 @@ def write_csv(rows: list[dict[str, object]], output: TextIO) -> None:
         "stored_k",
         "matches_stored",
     )
-    writer = csv.DictWriter(output, fieldnames=columns)
+    usgs = bool(rows) and rows[0].get("components") == "HD"
+    renames = {"x_range_nT":"h_amplitude_nT", "y_range_nT":"d_amplitude_nT",
+               "x_coverage":"h_coverage", "y_coverage":"d_coverage", "k_x":"k_h", "k_y":"k_d",
+               "k_x_decimal":"k_h_decimal", "k_y_decimal":"k_d_decimal"} if usgs else {}
+    if usgs:
+        columns += ("k_decimal", "k_x_decimal", "k_y_decimal")
+    writer = csv.DictWriter(output, fieldnames=tuple(renames.get(c,c) for c in columns))
     writer.writeheader()
     for row in rows:
         formatted = dict(row)
@@ -391,7 +397,11 @@ def write_csv(rows: list[dict[str, object]], output: TextIO) -> None:
         formatted["y_coverage"] = format_number(row["y_coverage"], 3)
         if row["stored_k"] is not None:
             formatted["stored_k"] = format_number(row["stored_k"], 1)
-        writer.writerow(formatted)
+        if usgs:
+            formatted.pop("components", None)
+            for key in ("k_decimal", "k_x_decimal", "k_y_decimal"):
+                formatted[key] = format_number(row[key], 1)
+        writer.writerow({renames.get(key,key):value for key,value in formatted.items()})
 
 
 def write_comprehensive(rows: list[dict[str, object]], output: TextIO) -> None:
@@ -426,7 +436,7 @@ def main() -> int:
             "  Set K9 to 500 nT: python calculate_k_index.py WIC/WIC23DEC.BIN --k9-limit 500\n\n"
             "SQ files contain 24 rows of X, Y, Z values in pT. Plain-text and gzip/bzip2/xz-\n"
             "compressed IAGA files are supported. IAGA input requires --k9-limit. IH also\n"
-            "requires an SQ source; FMI requires --longitude. KASM/Hermanus accept\n"
+            "requires an SQ source; FMI requires --longitude. KASM/Hermanus/USGS accept\n"
             "--iaga-sample-step 60 for minute input. The positional\n"
             "SQ-file argument is still accepted for compatibility; --sq-input is preferred."
         ),
@@ -439,8 +449,12 @@ def main() -> int:
         default="iaf",
         help="input format (default: iaf)",
     )
-    parser.add_argument("--method", choices=("ih", "fmi", "kasm", "hermanus"), default="ih",
+    parser.add_argument("--method", choices=("ih", "fmi", "kasm", "hermanus", "usgs"), default="ih",
                         help="K-index method (default: ih); all methods use standard-library Python")
+    parser.add_argument("--usgs-parameters", type=Path, help="USGS H/D calibration JSON (default: bootstrap monthly)")
+    parser.add_argument("--usgs-parameters-output", type=Path, help="save USGS calibration JSON for a single input month")
+    parser.add_argument("--usgs-mean-minutes", type=int, default=60, help="USGS minutes per selected mean (default: 60)")
+    parser.add_argument("--usgs-h-reference", type=float, help="USGS annual H reference in nT (default: input-month mean H)")
     parser.add_argument("--hermanus-mu", type=float, help="LRNS smoothing factor (default: 0.17)")
     parser.add_argument("--hermanus-q-index", choices=("M", "E"), help="quiet pattern in middle/end of UT day (default: M)")
     parser.add_argument("--hermanus-q-start", type=int, help="quiet-window start, 1-based UT minute (default: 300)")
@@ -450,11 +464,11 @@ def main() -> int:
     parser.add_argument("--kasm-smoothing", type=float, default=1.0,
                         help="KASM smoothing factor (finite and positive; default: 1)")
     parser.add_argument("--iaga-sample-step", type=int, choices=(1, 60), default=1,
-                        help="KASM/Hermanus IAGA input cadence in seconds (default: 1; minute input: 60)")
+                        help="KASM/Hermanus/USGS IAGA input cadence in seconds (default: 1; minute input: 60)")
     parser.add_argument("--longitude", type=float,
                         help="observatory longitude in degrees east (FMI; defaults to IAF header)")
     parser.add_argument("--context-file", type=Path, action="append", default=[],
-                        help="additional same-station input file for FMI/KASM adjacent-day context; repeatable")
+                        help="additional same-station input file for FMI/KASM/USGS adjacent-day context; repeatable")
     parser.add_argument("--sq-input", type=Path, help="existing 24-row SQ file in pT")
     parser.add_argument("--sq-output", type=Path, help="write the SQ curve used by this run in pT")
     parser.add_argument(
@@ -488,6 +502,10 @@ def main() -> int:
     )
     args = parser.parse_args()
 
+    if args.method != "usgs" and (args.usgs_parameters or args.usgs_parameters_output or args.usgs_h_reference is not None or args.usgs_mean_minutes != 60):
+        parser.error("--usgs-* options require --method usgs")
+    if args.usgs_parameters and (args.usgs_h_reference is not None or args.usgs_mean_minutes != 60):
+        parser.error("USGS calibration-file settings cannot be combined with mean/H overrides")
     if not math.isfinite(args.kasm_smoothing) or args.kasm_smoothing <= 0:
         parser.error("--kasm-smoothing must be finite and positive")
     hermanus_options = {name: value for name, value in (
@@ -498,8 +516,8 @@ def main() -> int:
         parser.error("--hermanus-* options require --method hermanus")
     if args.method != "kasm" and args.kasm_smoothing != 1.0:
         parser.error("--kasm-smoothing applies to --method kasm")
-    if args.method not in ("kasm", "hermanus") and args.iaga_sample_step != 1:
-        parser.error("--iaga-sample-step applies to KASM/Hermanus")
+    if args.method not in ("kasm", "hermanus", "usgs") and args.iaga_sample_step != 1:
+        parser.error("--iaga-sample-step applies to KASM/Hermanus/USGS")
     if not 0 < args.minimum_coverage <= 1:
         parser.error("--minimum-coverage must be greater than 0 and at most 1")
     if args.k9_limit is not None and (not math.isfinite(args.k9_limit) or args.k9_limit <= 0):
@@ -524,22 +542,26 @@ def main() -> int:
     ):
         parser.error("SQ output must use a different path from K-index outputs")
 
-    if args.method in ("fmi", "kasm", "hermanus"):
+    if args.method in ("fmi", "kasm", "hermanus", "usgs"):
         inputs = [args.input_file.resolve(), *(p.resolve() for p in args.context_file)]
+        if args.usgs_parameters:
+            inputs.append(args.usgs_parameters.resolve())
         if any(p and p.resolve() in inputs for p in (args.output, args.comprehensive_output)):
             parser.error("outputs must not overwrite input or context files")
     try:
-        if args.method in ("fmi", "kasm", "hermanus"):
+        if args.method in ("fmi", "kasm", "hermanus", "usgs"):
             if args.method == "fmi":
                 import calculate_fmi_k_index as backend
             elif args.method == "kasm":
                 import calculate_kasm_k_index as backend
-            else:
+            elif args.method == "hermanus":
                 import calculate_hermanus_k_index as backend
+            else:
+                import calculate_usgs_k_index as backend
             label = args.method.upper()
             if args.sq_input or args.sq_file or args.sq_output or args.bootstrap_file:
                 parser.error(f"{label} fits its own daily quiet curve; SQ input/output and bootstrap files apply to IH")
-            if args.method in ("kasm", "hermanus") and args.longitude is not None:
+            if args.method in ("kasm", "hermanus", "usgs") and args.longitude is not None:
                 parser.error(f"--longitude applies to FMI; {label} uses no longitude parameter")
             if args.method == "hermanus" and args.context_file:
                 parser.error("Hermanus uses one day; --context-file applies to FMI/KASM")
@@ -548,7 +570,7 @@ def main() -> int:
             def load_days(path):
                 if args.input_format == "iaf":
                     return backend.iaf_days(parse_month_file(path))
-                if args.method in ("kasm", "hermanus"):
+                if args.method in ("kasm", "hermanus", "usgs"):
                     return backend.iaga_days(path, sample_step=args.iaga_sample_step)
                 return backend.iaga_days(path)
             days = load_days(args.input_file)
@@ -564,9 +586,23 @@ def main() -> int:
                     if day in days and days[day] != data:
                         raise ValueError(f"conflicting {label} context for {day}")
                     days[day] = data
+            usgs_params = None
+            if args.method == "usgs":
+                if args.usgs_parameters:
+                    usgs_params = backend.read_parameters(args.usgs_parameters)
+                if args.usgs_parameters_output:
+                    if len({(d.year,d.month) for d in targets}) != 1:
+                        parser.error("USGS calibration output requires one input calendar month")
+                    if usgs_params is None:
+                        usgs_params = backend.bootstrap_parameters(days, targets, nppm=args.usgs_mean_minutes,
+                            h_reference=args.usgs_h_reference, k9_nT=args.k9_limit)
+                    protected = [args.input_file, *args.context_file, args.output, args.comprehensive_output, args.usgs_parameters]
+                    if any(p and args.usgs_parameters_output.resolve() == p.resolve() for p in protected):
+                        parser.error("USGS calibration output must use a separate path")
             options = (dict(step=60 if args.input_format == "iaf" else 1, longitude=args.longitude)
                        if args.method == "fmi" else dict(smoothing=args.kasm_smoothing)
-                       if args.method == "kasm" else hermanus_options)
+                       if args.method == "kasm" else hermanus_options if args.method == "hermanus"
+                       else dict(parameters=usgs_params,nppm=args.usgs_mean_minutes,h_reference=args.usgs_h_reference))
             rows = backend.calculate_days(days, targets, k9_nT=args.k9_limit,
                 minimum_coverage=args.minimum_coverage, **options)
             processed_days = len(targets)
@@ -576,6 +612,9 @@ def main() -> int:
             context_status = ("unavailable due to missing adjacent-day context"
                               if args.method == "fmi" else "calculated with reduced adjacent-day context")
             bootstrap_description = f"{label} method; {missing_context} day(s) {context_status}"
+            if args.method == "usgs":
+                bootstrap_description = ("USGS H/D; calibration " + (str(args.usgs_parameters) if args.usgs_parameters else "bootstrapped monthly")
+                    + f"; {missing_context} day(s) with reduced adjacent-day context")
             if args.method == "hermanus":
                 bootstrap_description = ("Hermanus LRNS; single-day fit; settings: "
                     f"mu={hermanus_options.get('mu', .17)}, q-index={hermanus_options.get('qindex', 'M')}, "
@@ -629,6 +668,9 @@ def main() -> int:
     except (OSError, ValueError, struct.error) as error:
         parser.error(str(error))
 
+    if args.usgs_parameters_output:
+        import json
+        args.usgs_parameters_output.write_text(json.dumps(usgs_params, indent=2)+"\n")
     if args.sq_output:
         write_sq_curve(sq, args.sq_output)
 

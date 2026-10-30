@@ -4,7 +4,7 @@ A standard-library Python tool for estimating three-hour local K indices from IN
 
 ## Requirements
 
-Python 3.10 or newer. IH, FMI, KASM, and Hermanus LRNS all use only the Python standard library. No compiler, native library, or third-party package is needed for calculations or normal tests.
+Python 3.10 or newer. IH, FMI, KASM, Hermanus LRNS, and USGS all use only the Python standard library. No compiler, native library, or third-party package is needed for calculations or normal tests.
 
 ## Quick start
 
@@ -219,11 +219,84 @@ The original public-domain source is preserved for reference. The Python port
 includes the forward loop accidentally commented out in the archived Fortran.
 See [source and validation details](vendor/hermanus/README.md).
 
+## Select the USGS method
+
+The Wilson USGS method is implemented in standard-library Python from the
+[reference sources distributed by ISGI](https://isgi.unistra.fr/softwares.php).
+It selects quiet mean values using monthly statistics, fits sliding regression
+segments, and interpolates their intersections with a cubic spline. Statistical
+confidence tests then select between the residual amplitude and the unfiltered
+range, and may adjust the amplitude for a significant linear trend.
+
+```bash
+python3 calculate_k_index.py KIR/KIR23DEC.BIN --method usgs \
+  --context-file KIR/KIR23NOV.BIN \
+  --usgs-parameters-output /tmp/KIR23DEC-usgs-parameters.json \
+  -o /tmp/KIR23DEC-k-index-USGS.csv
+
+python3 run_pipeline.py --method usgs --output-dir /tmp/usgs-results
+```
+
+Calibration is bootstrapped separately for each input calendar month, following
+the SELMVS workflow. A month of representative data is preferable to a short or
+persistently disturbed sample. Calibration JSON records the H/D baselines,
+reference H, mean-selection limits, quiet dates, and confidence multipliers, and
+can be reviewed or reused with `--usgs-parameters PATH`. The calibration file
+is JSON, not the legacy `.KAY` text layout. No compiler is required.
+
+The original USGS algorithm operates on **H and D**. X/Y input is converted to
+horizontal magnitude and declination, then centered and quantized to the
+reference's 0.1 nT and 0.1 arcminute units. Declination is unwrapped around the
+calibration baseline. D amplitudes are converted back to nT using `XD=H/3438`.
+Use `--usgs-h-reference NT` to supply the previous year's annual mean H when
+available; the default estimates H from the input month. The centered input
+must fit the reference's signed 16-bit range; unsupported large excursions
+raise an error rather than wrap or clip.
+
+- `--usgs-parameters PATH`: load an existing calibration JSON instead of bootstrap.
+- `--usgs-parameters-output PATH`: save calibration for a single input calendar month.
+- `--usgs-mean-minutes N`: minutes per quiet mean; a divisor of 1440 between 12
+  and 720 (default 60; the original documentation normally uses 60).
+- `--usgs-h-reference NT`: annual mean H in nT; default is the input-month mean.
+
+The generated calibration uses three means per regression segment, 2.576 for
+mean-selection confidence, 1.96 for range-selection confidence, and 2.58 for
+both three-hour amplitude confidence tests. The JSON permits `segment_means`
+from 3 to 5 and separate 2-by-8 `source_confidence` and
+`adjustment_confidence` arrays. These starting settings require observatory
+validation; bootstrap does not establish agreement with hand-scaled K.
+The legacy optional nighttime range gate is not exposed; it is off, matching
+the supplied Newport run example. Calibration files use absolute ISO dates
+for `quiet_days`, so previously selected dates are not silently applied to a
+new month.
+
+USGS uses minute means and the available neighboring days. If a neighbor is
+absent it follows the reference's mean/mode fallback rather than dropping the
+target day. `--context-file` supplies additional same-station data, and the
+pipeline uses neighboring months automatically. For minute IAGA input, use
+`--input-format iaga --iaga-sample-step 60 --k9-limit NT`. One-second IAGA input
+is averaged using the same complete-minute rule as KASM. H/D coverage requires
+both X and Y. The reference requires at least 121 valid minutes per three-hour
+interval; `--minimum-coverage` can impose a stricter requirement (default 0.9).
+
+The USGS CSV uses `h_amplitude_nT`, `d_amplitude_nT`, `h_coverage`, `d_coverage`,
+`k_h`, and `k_d`, so H/D results are labeled correctly. It also includes
+`k_decimal`, `k_h_decimal`, and `k_d_decimal`. The reference rounds amplitudes
+to integer nT and interpolates digital K in tenths, from 0.0 to 9.9. The `k`
+column and comprehensive output use its truncated integer K, consistent with
+the reference's daily K sum. Its legacy 6000 nT amplitude ceiling is retained.
+
+Pipeline configuration supports `"method": "usgs"`, `usgs_parameters` (a JSON
+path relative to the configuration directory), `usgs_mean_minutes`, and
+`usgs_h_reference`. Outputs use `-USGS` filenames. IH remains the default.
+See [reference provenance and portability repairs](vendor/usgs/README.md) for
+numerical validation and the defined handling of archived edge-case bugs.
+
 ## Options
 
 Run `python3 calculate_k_index.py --help` for all options.
 
-- `--method {ih,fmi,kasm,hermanus}`: select the calculation method (default: `ih`).
+- `--method {ih,fmi,kasm,hermanus,usgs}`: select the calculation method (default: `ih`).
 - `--sq-input PATH`: use an existing 24-row SQ file.
 - `--sq-output PATH`: save the SQ curve used by this run in the same 24-row format.
 - `--bootstrap-file PATH`: use another IAF month file to construct the SQ curve; defaults to the month being processed.
@@ -237,7 +310,7 @@ Run `python3 calculate_k_index.py --help` for all options.
 
 ## Output and limitations
 
-The CSV includes X/Y deflection ranges, coverage, component K values, combined K, and comparisons with K values embedded in the IAF file when available. For IH, FMI, and Hermanus, the combined K is the larger of the separately classified X and Y indices. KASM additionally caps combined K at its unfiltered value. The comprehensive output writes eight K values per date, `-` for unavailable intervals, parenthesized partial sums, and `-1` when no interval K value is available.
+For IH, FMI, KASM, and Hermanus, the CSV includes X/Y deflection ranges, coverage, component K values, combined K, and comparisons with K values embedded in the IAF file when available. For IH, FMI, and Hermanus, the combined K is the larger of the separately classified X and Y indices. KASM additionally caps combined K at its unfiltered value. The comprehensive output writes eight K values per date, `-` for unavailable intervals, parenthesized partial sums, and `-1` when no interval K value is available.
 
 The default IAF path uses one-minute means, while the original SQ/K method described in the accompanying algorithm uses one-second samples. IAGA input can retain one-second resolution; IAF-derived K values remain estimates and may not match the embedded values exactly.
 

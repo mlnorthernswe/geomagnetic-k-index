@@ -1,0 +1,16 @@
+DATA TYPE: 0
+Number of points per mean: 60
+Number of means per segment: 3
+H, SE SRC:   2.58  2.58  2.58  2.58  1.98  1.98  1.98  1.98
+H, SE ADJ:   2.58  2.58  2.58  2.58  1.98  1.98  1.98  1.98
+D, SE SRC:   2.58  2.58  2.58  2.58  1.98  1.98  1.98  1.98
+D, SE ADJ:   2.58  2.58  2.58  2.58  1.98  1.98  1.98  1.98
+SMOOTH NIGHT? N
+BEGINNING AND ENDING HOURS: 18 03
+NIGHTTIME RANGE IN nT:  25  10
+DEBUG? N
+ 0 0 0 0 0 0
+Write *.CRV file? Y
+Preliminary? Y
+ 
+
