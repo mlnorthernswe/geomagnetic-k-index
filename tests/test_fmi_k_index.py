@@ -1,7 +1,6 @@
-"""Validate the optional FMI backend against FMI's published reference data."""
+"""Validate the Python FMI backend against FMI's published reference data."""
 import csv
 import io
-import shutil
 import subprocess
 import sys
 import tempfile
@@ -16,7 +15,6 @@ import run_pipeline as pipeline
 ROOT = Path(__file__).resolve().parent.parent
 
 
-@unittest.skipUnless(shutil.which("cc"), "FMI backend requires a C compiler")
 class TestFMI(unittest.TestCase):
     def test_published_fmi_example(self):
         pairs = [tuple(map(int, line.split())) for line in
@@ -109,9 +107,10 @@ class TestFMIValidation(unittest.TestCase):
         self.assertNotEqual(result.returncode, 0)
         self.assertIn("FMI fits its own daily quiet curve", result.stderr)
 
-    def test_missing_compiler_is_actionable(self):
+    def test_no_compiler_required(self):
         from unittest.mock import patch
-        with patch.dict("os.environ", {"CC": "/nonexistent/fmi-compiler"}):
-            with self.assertRaisesRegex(ValueError, "working C compiler"):
-                with fmi.FMI():
-                    pass
+        with patch.dict("os.environ", {"CC": "/nonexistent/fmi-compiler", "PATH": ""}), \
+                patch("subprocess.run", side_effect=AssertionError("FMI must not invoke a compiler")):
+            with fmi.FMI() as backend:
+                self.assertEqual(backend.calculate([100000]*4320, [20000]*4320,
+                                                   60, 750, 27)[0], [0]*8)

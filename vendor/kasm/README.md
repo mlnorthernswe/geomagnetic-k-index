@@ -28,7 +28,17 @@ Component K and range diagnostics describe the filtered residuals, so combined
 K may be smaller than max(k_x, k_y) because of this final cap. Both components
 must be valid, and the application's observed-coverage cutoff also applies.
 
-The wrapper catches C++ exceptions at the C ABI boundary and reports failure.
-The library is compiled into a temporary directory with a C++11 compiler.
-No files are downloaded at runtime. Reference validation builds and runs the
-complete author's program separately and compares all eight indices per day.
+The standard-library port in `calculate_kasm_k_index.py` preserves the Givens
+rotations, QR/back substitution, adaptive weights, and minimum-curvature gap
+interpolation with double-precision arithmetic. It also preserves the original
+repeated gap-flag counts, boundary treatment, and final combined-K cap. All
+calculation state is local, and caller input arrays are never modified.
+
+No compiler or native library is required at runtime. `wrapper.cpp` remains
+only for developer reference-fixture generation, not normal calculations or
+tests. It catches C++ exceptions at the C ABI boundary. The standalone author's
+program was built separately to obtain the 1,240-value fixture; an additional
+native diagnostic fixture checks component ranges, indices, and gap flags for
+station data and synthetic cases. See `tests/data/native-port-reference.md`.
+Compilers are needed only to regenerate native fixtures deliberately.
+No files are downloaded at runtime.

@@ -2,7 +2,6 @@
 import csv
 import hashlib
 import json
-import shutil
 import subprocess
 import sys
 import tempfile
@@ -18,7 +17,6 @@ import run_pipeline as pipeline
 ROOT = Path(__file__).resolve().parent.parent
 
 
-@unittest.skipUnless(shutil.which("c++"), "KASM requires C++11")
 class TestKASM(unittest.TestCase):
     def test_author_standalone_reference(self):
         fixture = json.loads((ROOT / "tests/data/kasm-reference.json").read_text())
@@ -109,11 +107,15 @@ class TestKASMInputs(unittest.TestCase):
             with self.assertRaisesRegex(ValueError, "align"):
                 kasm.iaga_days(path, sample_step=60)
 
-    def test_missing_compiler(self):
-        with patch.dict("os.environ", {"CXX": "/nonexistent/kasm-compiler"}):
-            with self.assertRaisesRegex(ValueError, "C\\+\\+11 compiler"):
-                with kasm.KASM():
-                    pass
+    def test_no_compiler_required(self):
+        with patch.dict("os.environ", {"CXX": "/nonexistent/kasm-compiler", "PATH": ""}), \
+                patch("subprocess.run", side_effect=AssertionError("KASM must not invoke a compiler")):
+            with kasm.KASM() as backend:
+                self.assertEqual(backend.calculate([10000.]*1440, [2000.]*1440, 0, 500)[0], [0]*8)
+
+    def test_numerical_underflow_is_reported(self):
+        with self.assertRaisesRegex(ValueError, "numerical calculation failed"):
+            kasm.KASM().calculate([10000.]*1440, [2000.]*1440, 0, 500, smoothing=1e-323)
 
     def test_cli_rejects_invalid_options(self):
         for flags, message in [(["--sq-output", "/tmp/unused-sq"], "own daily quiet curve"),

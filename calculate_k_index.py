@@ -440,7 +440,7 @@ def main() -> int:
         help="input format (default: iaf)",
     )
     parser.add_argument("--method", choices=("ih", "fmi", "kasm", "hermanus"), default="ih",
-                        help="K-index method (default: ih); FMI requires C; KASM requires C++11; Hermanus uses Python")
+                        help="K-index method (default: ih); all methods use standard-library Python")
     parser.add_argument("--hermanus-mu", type=float, help="LRNS smoothing factor (default: 0.17)")
     parser.add_argument("--hermanus-q-index", choices=("M", "E"), help="quiet pattern in middle/end of UT day (default: M)")
     parser.add_argument("--hermanus-q-start", type=int, help="quiet-window start, 1-based UT minute (default: 300)")

@@ -1,49 +1,197 @@
-"""KASM 1.11 adapter using the author's unmodified C++ smoothing routines."""
+"""Standard-library Python port of the author's KASM 1.11 method."""
 from __future__ import annotations
 
-import ctypes
+import bisect
 import math
-import os
-import shlex
-import subprocess
-import tempfile
 import struct
 from datetime import timedelta
-from pathlib import Path
 
 import calculate_k_index as ih
 from calculate_fmi_k_index import iaf_days as _iaf_days
 
 
-class KASM:
-    """Compile the optional backend once per run; accept minute means in nT."""
+_UNDEF = 1e30
 
+
+class _Givens:
+    """Stable rotations with the same operation order as KASM's giv class."""
+    def __init__(self):
+        self.c, self.s = 1.0, 0.0
+
+    def rot(self, a, b):
+        aa, bb = abs(a), abs(b)
+        if aa > bb:
+            q = b / a
+            r = math.sqrt(1.0 + q*q)
+            self.c = (-1.0 if a < 0 else 1.0) / r
+            self.s = q * self.c
+            return r * aa
+        if bb > 0:
+            q = a / b
+            r = math.sqrt(1.0 + q*q)
+            self.s = (-1.0 if b < 0 else 1.0) / r
+            self.c = q * self.s
+            return r * bb
+        self.c, self.s = 1.0, 0.0
+        return 0.0
+
+    def __call__(self, a, b):
+        return self.c*a + self.s*b, self.c*b - self.s*a
+
+
+def _solve(values, weights):
+    """Givens QR of [second differences; diagonal weights], returning residuals."""
+    n = len(values)
+    d, p, q, output = ([0.0]*n for _ in range(4))
+    r, rlc, rln = 0.0, weights[0], weights[1]
+    fc, fn = rlc*values[0], rln*values[1]
+    gv = _Givens()
+    for i in range(n-2):
+        d[i] = gv.rot(1.0, rlc)
+        p[i], r = gv(-2.0, r)
+        q[i], s = gv(1.0, 0.0)
+        output[i], fp = gv(0.0, fc)
+        fc, fn = fn, weights[i+2]*values[i+2]
+        rlc = gv.rot(rln, r)
+        r, s = gv(0.0, s)
+        fc, fp = gv(fc, fp)
+        rln = gv.rot(weights[i+2], s)
+        fn, fp = gv(fn, fp)
+    output[-1] = fn / rln
+    output[-2] = fc / rlc - (r / rlc) * output[-1]
+    for i in range(n-3, -1, -1):
+        output[i] = (output[i] - p[i]*output[i+1] - q[i]*output[i+2]) / d[i]
+    return [a-b for a,b in zip(values, output)]
+
+
+def _fit_gap(values):
+    """Original KASM minimum-curvature interpolation of a group of gaps."""
+    x = values.copy()
+    m = len(x)
+    ml = m - (2 if x[m-2] < _UNDEF else 1)
+    n = sum(v >= _UNDEF for v in x[1:ml])
+    b, d, f, g = ([0.0]*n for _ in range(4))
+    gv = _Givens()
+    k = 0
+    if x[1] >= _UNDEF:
+        r, t, j = 0.0, 0.0, 1
+    else:
+        r, t, j = 1.0, -x[0]+2.0*x[1], 2
+    while j < ml:
+        b[k], d[k] = -x[j-1], -2.0
+        j += 1
+        if x[j] < _UNDEF:
+            b[k] += -x[j]
+        else:
+            f[k] = 1.0
+            j += 1
+            while x[j] >= _UNDEF:
+                d[k] = gv.rot(d[k], r)
+                f[k], r = gv(f[k], 0.0)
+                b[k], t = gv(b[k], t)
+                d[k] = gv.rot(d[k], 1.0)
+                f[k], d[k+1] = gv(f[k], -2.0)
+                g[k], f[k+1] = gv(0.0, 1.0)
+                b[k], b[k+1] = gv(b[k], 0.0)
+                k += 1
+                j += 1
+            d[k] = gv.rot(d[k], r)
+            f[k], r = gv(f[k], 0.0)
+            b[k], t = gv(b[k], t)
+            d[k] = gv.rot(d[k], 1.0)
+            f[k], d[k+1] = gv(f[k], -2.0)
+            b[k], b[k+1] = gv(b[k], -x[j])
+            k += 1
+        d[k] = gv.rot(d[k], r)
+        b[k], t = gv(b[k], t)
+        if j != m-1:
+            d[k] = gv.rot(d[k], 1.0)
+            t = 2.0*x[j]
+            if j == ml:
+                t += -x[j+1]
+            else:
+                f[k], r = gv(0.0, 1.0)
+                j += 1
+            b[k], t = gv(b[k], t)
+        k += 1
+    k, j = n-1, ml-1
+    yd = b[k] / d[k]
+    x[j] = yd
+    if k > 0:
+        k -= 1
+        yf, yd = yd, (b[k]-yd*f[k])/d[k]
+        j -= 1
+        if x[j] < _UNDEF:
+            j -= 1
+        x[j] = yd
+        for k in range(k-1, -1, -1):
+            yg, yf = yf, yd
+            yd = (b[k]-yf*f[k]-yg*g[k])/d[k]
+            j -= 1
+            if x[j] < _UNDEF:
+                j -= 1
+            x[j] = yd
+    return x
+
+
+def _fill_gaps(x):
+    """Port of fits(), including repeated flag counts and boundary rules."""
+    n, i = len(x), 0
+    flags = [0]*10
+    while i < n and x[i] >= _UNDEF:
+        i += 1
+    xi = x[i] if i < n else 0.0
+    x[:i] = [xi]*i
+    for j in range((i-1+180)//180):
+        flags[j] += 1
+    m = n-1
+    while m > i and x[m] >= _UNDEF:
+        m -= 1
+    if m < n-1:
+        x[m+1:] = [x[m]]*(n-1-m)
+        for j in range((m+1)//180, (n-1+180)//180):
+            flags[j] += 1
+    while i < m:
+        length = 0
+        for k in range(i+1, m+1):
+            if x[k] >= _UNDEF:
+                length += 1
+            else:
+                if length > 6:
+                    for j in range((k-length)//180, (k-1+180)//180):
+                        flags[j] += 1
+                length = 0
+        lp = i
+        i += 1
+        while i < m and x[i] < _UNDEF:
+            i += 1
+        if i < m:
+            if i-lp > 2:
+                lp = i-2
+            i += 2
+            while i < m and (x[i-1] >= _UNDEF or x[i] >= _UNDEF):
+                i += 1
+            x[lp:i+1] = _fit_gap(x[lp:i+1])
+            if i < m:
+                i -= 1
+    return flags
+
+
+def _classify(value):
+    return bisect.bisect_right((5,10,20,40,70,120,200,330,500), value)
+
+
+def _range(values):
+    return max(values) - min(values)
+
+
+class KASM:
+    """Standard-library Python port of the author's KASM 1.11 solver."""
     def __enter__(self):
-        self._temp = tempfile.TemporaryDirectory(prefix="k-index-kasm-")
-        source = Path(__file__).resolve().parent / "vendor" / "kasm"
-        library = Path(self._temp.name) / "kasm.so"
-        try:
-            result = subprocess.run(
-                [*shlex.split(os.environ.get("CXX", "c++")), "-std=c++11", "-O2",
-                 "-shared", "-fPIC", str(source / "casm.cpp"),
-                 str(source / "wrapper.cpp"), "-o", str(library)],
-                capture_output=True, text=True,
-            )
-            if result.returncode:
-                raise ValueError(result.stderr.strip())
-            self._lib = ctypes.CDLL(str(library))
-            dp = ctypes.POINTER(ctypes.c_double)
-            ip = ctypes.POINTER(ctypes.c_int)
-            self._lib.kasm_details.argtypes = [ctypes.c_int, ctypes.c_int, dp, dp,
-                ctypes.c_double, ctypes.c_double, ip, ip, ip, dp, dp, ip, ip]
-            self._lib.kasm_details.restype = ctypes.c_int
-        except (OSError, ValueError) as error:
-            self._temp.cleanup()
-            raise ValueError(f"KASM requires a working C++11 compiler (c++ or CXX): {error}") from error
         return self
 
     def __exit__(self, *args):
-        self._temp.cleanup()
+        pass
 
     def calculate(self, x, y, offset, k9_nT, smoothing=1.0):
         if len(x) not in (1440, 1620, 1800) or len(y) != len(x):
@@ -57,16 +205,39 @@ class KASM:
         for v in (*x, *y):
             if v is not None and (not math.isfinite(v) or abs(v) >= 1e29):
                 raise ValueError("invalid KASM magnetic field value")
-        array = ctypes.c_double * len(x)
-        cx = array(*(1e30 if v is None else v for v in x))
-        cy = array(*(1e30 if v is None else v for v in y))
-        ks, kx, ky, invalid_x, invalid_y = [(ctypes.c_int * 8)() for _ in range(5)]
-        rx, ry = (ctypes.c_double * 8)(), (ctypes.c_double * 8)()
-        status = self._lib.kasm_details(len(x), offset, cx, cy, k9_nT, smoothing,
-                                       ks, kx, ky, rx, ry, invalid_x, invalid_y)
-        if status:
-            raise ValueError(f"KASM numerical calculation failed (status {status})")
-        return [list(a) for a in (ks, kx, ky, rx, ry, invalid_x, invalid_y)]
+        try:
+            scale = 500.0 / k9_nT
+            normalized, residuals, flags = [], [], []
+            for values in (x, y):
+                data = [_UNDEF if v is None else float(v) for v in values]
+                flags.append(_fill_gaps(data))
+                low = min(data)
+                data = [scale*(v-low) for v in data]
+                normalized.append(data)
+                initial = _solve(data, [math.sqrt(5.e-7*smoothing)]*len(data))
+                weights = []
+                base = math.sqrt(7.e-7*smoothing)
+                for i in range(0, len(data), 60):
+                    q = min(_range(initial[i:i+60])/6.66-1.0, 50.0)
+                    weights.extend([base*math.exp(-q/2.0)]*60)
+                residuals.append(_solve(data, weights))
+            ks, kx, ky, rx, ry, invalid_x, invalid_y = ([] for _ in range(7))
+            for i in range(8):
+                start, end = offset+i*180, offset+(i+1)*180
+                ranges = [_range(values[start:end]) for values in residuals]
+                if any(not math.isfinite(v) for v in ranges):
+                    raise ValueError("KASM numerical calculation failed")
+                ix, iy = (_classify(v) for v in ranges)
+                kx.append(ix)
+                ky.append(iy)
+                ks.append(min(max(ix, iy), _classify(max(_range(v[start:end]) for v in normalized))))
+                rx.append(ranges[0]/scale)
+                ry.append(ranges[1]/scale)
+                invalid_x.append(flags[0][offset//180+i])
+                invalid_y.append(flags[1][offset//180+i])
+            return [ks, kx, ky, rx, ry, invalid_x, invalid_y]
+        except ArithmeticError as error:
+            raise ValueError("KASM numerical calculation failed") from error
 
 
 def iaf_days(records):

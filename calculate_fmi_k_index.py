@@ -1,70 +1,168 @@
-"""FMI K indices using the published FMI 1.3 C implementation.
-
-No external Python dependencies. A C compiler is required for this optional
-backend. The compiled library lives only in a temporary directory.
-"""
+"""Standard-library Python port of the published FMI 1.3 K-index method."""
 from __future__ import annotations
 
-import ctypes
+import functools
 import math
-import shlex
-import os
-import subprocess
-import tempfile
+import struct
+from array import array
 from datetime import datetime, timedelta
-from pathlib import Path
 
 import calculate_k_index as ih
 
 
+_FLOAT32 = struct.Struct("=f")
+_MISSING = 2**50
+_PI = 3.141592654  # Preserve the published approximation.
+
+
+def _f32(value):
+    return _FLOAT32.unpack(_FLOAT32.pack(value))[0]
+
+
+def _cdiv(a, b):
+    """C integer division truncates toward zero, including falling gaps."""
+    return (abs(a) // abs(b)) * (-1 if (a < 0) != (b < 0) else 1)
+
+
+@functools.lru_cache(maxsize=2)
+def _harmonic_basis(step):
+    """Single-precision trigonometry, shared across days, in compact arrays."""
+    angle = _f32(2.0 * _PI * (23.0 / 24.0) / 82800)
+    result = []
+    for k in range(1, 6):
+        sine, cosine = array("f"), array("f")
+        for t in range(0, 86400, step):
+            angle2 = _f32(_f32(t - 1800) * angle)
+            phase = _f32(k * angle2)
+            sine.append(math.sin(phase))
+            cosine.append(math.cos(phase))
+        result.append((sine, cosine))
+    return result
+
+
+def _fill_gaps(data, step):
+    i, n = 0, len(data)
+    while i < n:
+        if data[i] != _MISSING:
+            i += 1
+            continue
+        start = i
+        while i < n and data[i] == _MISSING:
+            i += 1
+        length = i - start
+        if start > 0 and i < n and length * step < 900:
+            left, delta = data[start-1], data[i] - data[start-1]
+            for j in range(1, length+1):
+                data[start+j-1] = left + _cdiv(j*delta, length+1)
+
+
+def _interpolate_means(values):
+    valid = [i for i, value in enumerate(values) if value != _MISSING]
+    if not valid:
+        return
+    first, last = valid[0], valid[-1]
+    values[:first] = [values[first]] * first
+    values[last+1:] = [values[last]] * (23-last)
+    for left, right in zip(valid, valid[1:]):
+        for i in range(left+1, right):
+            values[i] = values[left] + _cdiv((i-left)*(values[right]-values[left]), right-left)
+
+
+def _fit_curve(means, step):
+    """Fifth-order harmonic fit, retaining C float promotions and long casts."""
+    f = _f32
+    coefficient = f(f(means[23] - means[0]) / f(82800))
+    means = [value - int(f(coefficient * f(i*3600))) for i, value in enumerate(means)]
+    real, imaginary = [], []
+    for k in range(6):
+        re, im = f(means[0]), 0.0
+        angle = f(-k * (2.0 * _PI / 24.0))
+        for j in range(1, 24):
+            phase = f(j * angle)
+            sine, cosine = f(math.sin(phase)), f(math.cos(phase))
+            re = f(re + f(f(means[j]) * cosine))
+            im = f(im + f(f(means[j]) * sine))
+        real.append(re)
+        imaginary.append(im)
+    result = []
+    basis = _harmonic_basis(step)
+    for i, t in enumerate(range(0, 86400, step)):
+        value = int(real[0])
+        for k, (sine, cosine) in enumerate(basis, 1):
+            difference = f(f(real[k] * cosine[i]) - f(imaginary[k] * sine[i]))
+            value += int(2.0 * difference)
+        result.append(int(value / 24.0 + f(coefficient * f(t-1800))))
+    return result
+
+
 class FMI:
-    """Sequential, context-managed adapter to FMI's global-state C routines."""
+    """Standard-library port of FMI 1.3; calculation state is local to a call."""
 
     def __enter__(self):
-        if ctypes.sizeof(ctypes.c_long) < 8:
-            raise ValueError("FMI backend requires a 64-bit Unix C long")
-        self._temp = tempfile.TemporaryDirectory(prefix="k-index-fmi-")
-        source = Path(__file__).resolve().parent / "vendor" / "fmi" / "wrapper.c"
-        library = Path(self._temp.name) / "fmi.so"
-        try:
-            result = subprocess.run(
-                [*shlex.split(os.environ.get("CC", "cc")), "-std=gnu89", "-O2",
-                 "-shared", "-fPIC", str(source), "-lm", "-o", str(library)],
-                capture_output=True, text=True,
-            )
-            if result.returncode:
-                raise ValueError(f"cannot compile FMI backend: {result.stderr.strip()}")
-            self._lib = ctypes.CDLL(str(library))
-            ptr = ctypes.POINTER(ctypes.c_long)
-            self._lib.fmi_details.argtypes = [ptr, ptr, *([ctypes.c_long] * 4), *([ptr] * 5)]
-            self._lib.fmi_details.restype = None
-        except (OSError, ValueError) as error:
-            self._temp.cleanup()
-            raise ValueError(f"FMI requires a working C compiler (cc or CC): {error}") from error
         return self
 
     def __exit__(self, *args):
-        self._temp.cleanup()
+        pass
 
     def calculate(self, x, y, step, k9_nT, longitude):
         if step not in (1, 60):
             raise ValueError("FMI adapter supports one-second or one-minute samples")
-        if len(x) != 3 * 86400 // step or len(y) != len(x):
+        n = 86400 // step
+        if len(x) != 3*n or len(y) != len(x):
             raise ValueError("FMI requires exactly three days of X and Y samples")
         if not math.isfinite(k9_nT) or k9_nT <= 0 or round(k9_nT * 10) < 100:
             raise ValueError("FMI K9 limit must be finite and at least 10 nT")
         if not math.isfinite(longitude) or not -180 <= longitude <= 360:
             raise ValueError("longitude must be finite and between -180 and 360 degrees")
-        # IAF uses 0.1 nT. This sentinel is outside physical geomagnetic values.
-        missing = 2**50
-        array = ctypes.c_long * len(x)
-        cx = array(*(missing if v is None else int(v) for v in x))
-        cy = array(*(missing if v is None else int(v) for v in y))
-        outputs = [(ctypes.c_long * 8)() for _ in range(5)]
-        self._lib.fmi_details(cx, cy, step, round(k9_nT * 10),
-                              round(longitude) % 360, missing, *outputs)
-        return [list(a) for a in outputs]
+        components = [[_MISSING if v is None else int(v) for v in values] for values in (x, y)]
+        for values in components:
+            _fill_gaps(values, step)
+        limits = [round(k9_nT*10)*v//7500 for v in (75,150,300,600,1050,1800,3000,4950,7500)]
+        defaults = [5400]*3 + [3600]*3 + [0]*12 + [3600]*3 + [5400]*3
+        shift = (round(longitude) % 360) // 15
+        defaults = [defaults[(i+shift) % 24] for i in range(24)]
+        lengths = [0] + [min(int(60*math.exp(3.3*math.log(k))), 64800) for k in range(1,10)]
 
+        def classify(values):
+            indices, ranges = [], []
+            for i in range(8):
+                # The upstream loop omits the final sample of each interval.
+                part = values[i*n//8:(i+1)*n//8-1]
+                high, low = max(part), min(part)
+                ranges.append(high-low)
+                indices.append(-1 if high == _MISSING else sum(high-low > v for v in limits))
+            return indices, ranges
+
+        # Prefix sums accelerate large activity-dependent averaging windows;
+        # missing counts prevent the sentinel from entering any arithmetic.
+        prefixes = []
+        for values in components:
+            sums, gaps = [0], [0]
+            for value in values:
+                sums.append(sums[-1] + (value if value != _MISSING else 0))
+                gaps.append(gaps[-1] + (value == _MISSING))
+            prefixes.append((sums, gaps))
+        residuals = [values[n:2*n] for values in components]
+        for iteration in range(3):
+            kx, rx = classify(residuals[0])
+            ky, ry = classify(residuals[1])
+            ks = [max(a,b) for a,b in zip(kx,ky)]
+            if iteration == 2:
+                return [ks, kx, ky, rx, ry]
+            fit_lengths = [min(1800+defaults[i]+(lengths[ks[i//3]] if ks[i//3] >= 0 else 0),86400)
+                           for i in range(24)]
+            residuals = []
+            for values, (sums, gaps) in zip(components, prefixes):
+                means = []
+                for hour, length in enumerate(fit_lengths):
+                    middle, wing = n + (3600*hour+1800)//step, length//step
+                    start, end = middle-wing, middle+wing+1
+                    means.append(_MISSING if gaps[end] != gaps[start]
+                                 else int((sums[end]-sums[start]) / (end-start)))
+                _interpolate_means(means)
+                harmonic = _fit_curve(means, step)
+                residuals.append([a-b if a != _MISSING and b != _MISSING else _MISSING
+                                  for a,b in zip(values[n:2*n], harmonic)])
 
 def iaf_days(records):
     """Map dates to X/Y arrays in 0.1 nT, stored record, and header longitude."""

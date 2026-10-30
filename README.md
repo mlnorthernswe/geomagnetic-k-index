@@ -4,7 +4,7 @@ A standard-library Python tool for estimating three-hour local K indices from IN
 
 ## Requirements
 
-Python 3.10 or newer. No third-party Python packages are required. The optional FMI backend requires a C compiler (`cc`, or set `CC`) on a 64-bit Unix system. KASM requires a C++11 compiler (`c++`, or set `CXX`) on Unix. Hermanus LRNS is implemented in standard-library Python and requires no compiler.
+Python 3.10 or newer. IH, FMI, KASM, and Hermanus LRNS all use only the Python standard library. No compiler, native library, or third-party package is needed for calculations or normal tests.
 
 ## Quick start
 
@@ -53,9 +53,11 @@ python3 run_pipeline.py --method fmi --output-dir /tmp/fmi-results
 ```
 
 FMI uses its own daily quiet-curve fit, rather than an IH monthly SQ file.
-SQ input/output and bootstrap files cannot be combined with FMI. The optional
-backend compiles the bundled, attributed [FMI reference C implementation](vendor/fmi/README.md)
-in a temporary directory; it does not download code at runtime.
+SQ input/output and bootstrap files cannot be combined with FMI. The method is
+implemented in standard-library Python, ported from the attributed
+[FMI 1.3 C reference](vendor/fmi/README.md). It preserves C integer truncation,
+single-precision harmonic arithmetic, and the original threshold comparisons.
+No compilation or downloads occur at runtime.
 
 For each target day, FMI needs the previous and following calendar days.
 The calculator accepts repeatable `--context-file` arguments in the same input
@@ -95,8 +97,8 @@ individual station configuration; `--method` overrides configuration. Optional
 
 ## Select the KASM method
 
-KASM (Adaptive Smoothing) is a third selectable method. This tool uses the author's
-[KASM 1.11 C++ implementation](https://magneto.igf.edu.pl/soft/kasm/), linked from
+KASM (Adaptive Smoothing) is implemented in standard-library Python, ported from
+the author's [KASM 1.11 C++ implementation](https://magneto.igf.edu.pl/soft/kasm/), linked from
 [INTERMAGNET](https://intermagnet.org/software.html), with original source and
 integration details in [vendor/kasm/README.md](vendor/kasm/README.md).
 IH remains the default.
@@ -135,7 +137,7 @@ For one-second IAGA input, omit `--iaga-sample-step` (default: 1). KASM averages
 each UTC minute; a component needs all 60 valid seconds, otherwise that minute
 is marked missing. Partial minutes are not treated as complete means. The
 coverage columns and `--minimum-coverage` refer to valid minute means before
-gap filling. The native routines fill interior gaps of up to six consecutive
+gap filling. The ported reference routines fill interior gaps of up to six consecutive
 missing minutes. Longer gaps and leading/trailing gaps invalidate touched
 intervals; both components must be valid for combined K.
 
@@ -148,6 +150,10 @@ are downloaded at runtime.
 Validation compares 1,240 interval values with a separately compiled, complete
 copy of the author's KASM program, covering all four example stations and two
 smoothing settings. [Reference fixture provenance](tests/data/kasm-reference.md).
+Additional [native diagnostic fixtures](tests/data/native-port-reference.md) check
+component ranges, indices, and gap flags for both Python ports, including FMI
+one-second samples and KASM boundary/gap cases. Compilers are only needed to
+regenerate native fixtures deliberately, not to run the fixture-based tests.
 
 ## Select the Hermanus LRNS method
 

@@ -29,6 +29,9 @@ jobs:
       - name: Run multi-station K-index pipeline
         run: python3 run_pipeline.py --output-dir artifacts/k-index --save-generated-sq
 
+      - name: Run FMI pipeline
+        run: python3 run_pipeline.py --method fmi --output-dir artifacts/k-index
+
       - name: Run KASM pipeline
         run: python3 run_pipeline.py --method kasm --output-dir artifacts/k-index
 
