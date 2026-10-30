@@ -111,14 +111,18 @@ def run_station_pipeline(
 
     months = discover_station_months(station_code, station_dir)
     method = str(method_override or station_cfg.get("method") or defaults.get("method", "ih"))
-    if method not in ("ih", "fmi", "kasm"):
+    if method not in ("ih", "fmi", "kasm", "hermanus"):
         raise ValueError(f"unknown K-index method: {method}")
-    if method in ("fmi", "kasm"):
+    if method in ("fmi", "kasm", "hermanus"):
         if save_generated_sq:
-            raise ValueError("--save-generated-sq applies to IH; FMI/KASM fit daily quiet curves")
+            raise ValueError("--save-generated-sq applies to IH; FMI/KASM/Hermanus fit daily quiet curves")
         return run_adaptive_months(months, target_dir, k9_limit, minimum_coverage,
                               station_cfg.get("longitude", defaults.get("longitude")), dry_run,
                               method=method,
+                              hermanus_options={name: station_cfg.get("hermanus_" + key, defaults.get("hermanus_" + key))
+                                  for name, key in (("mu", "mu"), ("qindex", "q_index"), ("qstart", "q_start"),
+                                      ("qend", "q_end"), ("qfactor", "q_factor"), ("seed", "seed"))
+                                  if station_cfg.get("hermanus_" + key, defaults.get("hermanus_" + key)) is not None},
                               smoothing=float(station_cfg.get("kasm_smoothing", defaults.get("kasm_smoothing", 1.0))))
     generated_sq_cache: dict[str, tuple[dict[str, tuple[float, ...]], str]] = {}
     summaries: list[MonthRunSummary] = []
@@ -213,19 +217,22 @@ def run_station_pipeline(
 
 
 def run_adaptive_months(months, target_dir, k9_limit, minimum_coverage, longitude, dry_run,
-                   method="fmi", smoothing=1.0):
+                   method="fmi", smoothing=1.0, hermanus_options=None):
     """Use all available station months as context, without bridging date gaps."""
     if method == "fmi":
         import calculate_fmi_k_index as backend
-    else:
+    elif method == "kasm":
         import calculate_kasm_k_index as backend
+    else:
+        import calculate_hermanus_k_index as backend
     from datetime import timedelta
 
     days = backend.iaf_days([record for month in months for record in month.records])
     if not days:
         return []
     options = (dict(longitude=None if longitude is None else float(longitude))
-               if method == "fmi" else dict(smoothing=smoothing))
+               if method == "fmi" else dict(smoothing=smoothing)
+               if method == "kasm" else (hermanus_options or {}))
     rows = backend.calculate_days(days, k9_nT=k9_limit,
         minimum_coverage=minimum_coverage, **options)
     by_date = {}
@@ -248,7 +255,8 @@ def run_adaptive_months(months, target_dir, k9_limit, minimum_coverage, longitud
         summaries.append(MonthRunSummary(
             station=month.station, yyyymm=month.yyyymm, input_path=month.path,
             sq_source=(f"FMI daily fit ({missing}d no context)" if method == "fmi"
-                       else f"KASM fit ({missing}d reduced context)"), days=len(targets),
+                       else f"KASM fit ({missing}d reduced context)" if method == "kasm"
+                       else "Hermanus LRNS single-day fit"), days=len(targets),
             intervals=len(month_rows), matched_intervals=sum(r["matches_stored"] == 1 for r in comparisons),
             comparable_intervals=len(comparisons), csv_output=csv_path,
             comprehensive_output=comp_path, sq_output=None))
@@ -298,7 +306,7 @@ def main(argv: list[str] | None = None) -> int:
         action="store_true",
         help="compute and report pipeline steps without writing files",
     )
-    parser.add_argument("--method", choices=("ih", "fmi", "kasm"),
+    parser.add_argument("--method", choices=("ih", "fmi", "kasm", "hermanus"),
                         help="override the K-index method (default: config or ih)")
     args = parser.parse_args(argv)
 

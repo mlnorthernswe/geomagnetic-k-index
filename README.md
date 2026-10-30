@@ -4,7 +4,7 @@ A standard-library Python tool for estimating three-hour local K indices from IN
 
 ## Requirements
 
-Python 3.10 or newer. No third-party Python packages are required. The optional FMI backend requires a C compiler (`cc`, or set `CC`) on a 64-bit Unix system. KASM requires a C++11 compiler (`c++`, or set `CXX`) on Unix.
+Python 3.10 or newer. No third-party Python packages are required. The optional FMI backend requires a C compiler (`cc`, or set `CC`) on a 64-bit Unix system. KASM requires a C++11 compiler (`c++`, or set `CXX`) on Unix. Hermanus LRNS is implemented in standard-library Python and requires no compiler.
 
 ## Quick start
 
@@ -149,11 +149,75 @@ Validation compares 1,240 interval values with a separately compiled, complete
 copy of the author's KASM program, covering all four example stations and two
 smoothing settings. [Reference fixture provenance](tests/data/kasm-reference.md).
 
+## Select the Hermanus LRNS method
+
+The Hermanus method uses linear-phase, robust, non-linear smoothing (LRNS):
+forward and reverse adaptive filtering estimates the quiet-day pattern, which
+is subtracted before classifying three-hour X/Y residual ranges. The public
+reference implementation and notes are distributed by
+[ISGI](https://isgi.unistra.fr/softwares.php). The method is described by
+[Hattingh, Loubser & Nagtegaal (1989)](https://doi.org/10.1111/j.1365-246X.1989.tb02038.x).
+
+```bash
+python3 calculate_k_index.py KIR/KIR23DEC.BIN --method hermanus \
+  --hermanus-mu 0.17 --hermanus-q-index M \
+  --hermanus-q-start 300 --hermanus-q-end 1009 \
+  -o /tmp/KIR23DEC-k-index-HERMANUS.csv
+
+python3 run_pipeline.py --method hermanus --output-dir /tmp/hermanus-results
+```
+
+Hermanus runs entirely in Python using the standard library. No compiler,
+`FC` setting, native library, or third-party package is required. The port
+preserves the reference routine's single-precision arithmetic and seeded
+random guide, and is checked against saved standalone Fortran results.
+GNU Fortran is needed only if a developer chooses to regenerate those reference
+fixtures with `python3 tests/generate_hermanus_reference.py`.
+
+**Tune the quiet-day parameters for each observatory.** The starting defaults
+`mu=0.17`, `q-index=M`, `q-start=300`, and `q-end=1009` come from the supplied
+Hermanus example; they are not validated settings for the included stations.
+The original guidance is to compare representative quiet, moderate, and disturbed
+days against hand-scaled indices, then hold the selected parameters fixed.
+The calculator reports the settings used on stderr.
+
+- `--hermanus-mu`: smoothing factor, 0.08 to 0.20 (default 0.17).
+- `--hermanus-q-index {M,E}`: `M` for a quiet-day pattern in the middle of the
+  UT day; `E` for a pattern spanning its ends (default `M`).
+- `--hermanus-q-start`, `--hermanus-q-end`: original Fortran's **1-based minute
+  indices**, with `1 <= start < end <= 1440`. For `M` they delimit the quiet-day
+  variation; for `E` they delimit the intervening nighttime period.
+- `--hermanus-q-factor`: reference amplitude in nT (default `0.01*K9`, the
+  standard K=0 upper boundary; the original Hermanus example uses 3 nT).
+- `--hermanus-seed`: deterministic guide-noise seed, 1 to 2147483646 (default 1).
+  The guide noise is reset for each component/day, so file order does not change results.
+
+Hermanus uses **one complete day of minute means** and needs no neighboring-day
+files, longitude, or external SQ file. `--context-file` is rejected. For minute
+IAGA input, use `--input-format iaga --iaga-sample-step 60 --k9-limit NT`.
+One-second IAGA input is averaged to minute means with the same full-minute
+coverage rule as KASM.
+
+The reference filter has no missing-data support: a component day containing
+any missing minute has all eight component indices unavailable; combined K
+requires both components. Observed coverage is still reported per interval.
+The tool does not invent samples or filter across gaps. Inputs should be free
+of instrument spikes and steps, as required by the original routine.
+
+Pipeline configuration accepts `"method": "hermanus"`, with optional keys
+`hermanus_mu`, `hermanus_q_index`, `hermanus_q_start`, `hermanus_q_end`,
+`hermanus_q_factor`, and `hermanus_seed` in station entries or defaults. Output
+filenames end in `-HERMANUS`; IH remains the default method.
+
+The original public-domain source is preserved for reference. The Python port
+includes the forward loop accidentally commented out in the archived Fortran.
+See [source and validation details](vendor/hermanus/README.md).
+
 ## Options
 
 Run `python3 calculate_k_index.py --help` for all options.
 
-- `--method {ih,fmi,kasm}`: select the calculation method (default: `ih`).
+- `--method {ih,fmi,kasm,hermanus}`: select the calculation method (default: `ih`).
 - `--sq-input PATH`: use an existing 24-row SQ file.
 - `--sq-output PATH`: save the SQ curve used by this run in the same 24-row format.
 - `--bootstrap-file PATH`: use another IAF month file to construct the SQ curve; defaults to the month being processed.
@@ -167,7 +231,7 @@ Run `python3 calculate_k_index.py --help` for all options.
 
 ## Output and limitations
 
-The CSV includes X/Y deflection ranges, coverage, component K values, combined K, and comparisons with K values embedded in the IAF file when available. For IH and FMI, the combined K is the larger of the separately classified X and Y indices. KASM additionally caps combined K at its unfiltered value. The comprehensive output writes eight K values per date, `-` for unavailable intervals, parenthesized partial sums, and `-1` when no interval K value is available.
+The CSV includes X/Y deflection ranges, coverage, component K values, combined K, and comparisons with K values embedded in the IAF file when available. For IH, FMI, and Hermanus, the combined K is the larger of the separately classified X and Y indices. KASM additionally caps combined K at its unfiltered value. The comprehensive output writes eight K values per date, `-` for unavailable intervals, parenthesized partial sums, and `-1` when no interval K value is available.
 
 The default IAF path uses one-minute means, while the original SQ/K method described in the accompanying algorithm uses one-second samples. IAGA input can retain one-second resolution; IAF-derived K values remain estimates and may not match the embedded values exactly.
 

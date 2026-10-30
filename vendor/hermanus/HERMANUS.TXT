@@ -1,0 +1,86 @@
+-----------------------------------------------------------------------------
+
+                              K-index algorithm
+
+                                     by
+
+                                M. Hattingh 
+                            (code by M Van Dyke)
+
+                        Hermanus Magnetic Observatory
+                                  C S I R                    
+
+                                P.O. Box 32
+                                Hermanus 7200
+                                South Africa
+
+                         Facsimile: + 27 - 283 - 22039
+
+-----------------------------------------------------------------------------
+
+   Method: Linear-phase, robust, non-linear smoothing (LRNS)
+
+Reference: Hattingh, M., L. Loubser, D. Nagtegaal - "Computer K-index
+           estimation by a new linear-phase, robust, non-linear smoothing
+           method", Geophys. J. Int. (1989) 99, 533-547.
+
+-----------------------------------------------------------------------------
+
+Note:  The version of the LRNS K-index algorithm on this diskette is the 
+       "public domain" release.  There is a commercially available 
+       "industrialized" version in existence.
+       The two versions are said to produce comparable results.
+
+-----------------------------------------------------------------------------
+
+                                Files on diskette:
+
+     K_FILTER.FOR - Fortran source code of routine to estimate solar-regular 
+                    (SR) variation of X and Y components of the geomagnetic  
+                    field.
+
+             Notes: Useage of the routine is described within the source code.
+
+                    When the quiet day pattern occurs in the middle of a UT
+                    day the "q index" should be set to "M".  This will be
+                    appropriate for observatories near the 0 degree longitude
+                    such as in Europe and Africa.  At such an observatory 
+                    "q start" is the minute of the day when the field begins 
+                    its regular variation pattern and "q end" is the minute 
+                    when the variations finish.
+                    For example qindex=M, qstart=300, qend=1009
+
+                    When the quiet day pattern occurs at the end of a UT day
+                    the "q index" should be set to "E".  This will be for
+                    observatories near the 180 degree longitude such as in
+                    the Pacific, eastern Asia and Australia.  At these
+                    observatories "q start" is the minute of the day when
+                    night-time conditions begin and "q end" is when the field
+                    begins its regular variation.
+                    For example qindex=E, qstart=360, qend=1080
+
+                    Type "E" data are the most difficult to match.  If the UT
+                    hours are shifted to to make it a type "M" curve better
+                    results can be obtained.  Withe type "E" curves the 
+                    "qstart" and "qend" values are more critical as well as
+                    trying to match the first few and last few values of a UT
+                    day during quiet days.
+
+                    K_FILTER calls the double precision random number  
+                    generator function, random().  The random numbers actually
+                    required by K_FILTER are between -1 and +1 and can be
+                    either real or double precision. 
+                    The purpose of this is to stimulate the adaption in the
+                    case of very quiet days.
+                    A random number generator which may be adapted for use in
+                    k_filter (with output in [0,1]) is included in the file
+                    spectral.for in the AGSO directory of the diskette.  
+
+                    The resultant SR produced by K_FILTER can be subtracted 
+                    from the original data and the difference scaled directly 
+                    using user supplied routines.
+
+-----------------------------------------------------------------------------
+                                End of file
+-----------------------------------------------------------------------------
+

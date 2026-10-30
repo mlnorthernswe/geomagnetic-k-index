@@ -425,8 +425,9 @@ def main() -> int:
             "  Use IAGA 1-second data: python calculate_k_index.py KIR/kir202609qsec.sec.gz --input-format iaga --sq-input KIR/202310KIRsq --k9-limit 1500\n"
             "  Set K9 to 500 nT: python calculate_k_index.py WIC/WIC23DEC.BIN --k9-limit 500\n\n"
             "SQ files contain 24 rows of X, Y, Z values in pT. Plain-text and gzip/bzip2/xz-\n"
-            "compressed IAGA files are supported. IAGA input requires an SQ source\n"
-            "and --k9-limit because neither value is supplied by the data file. The positional\n"
+            "compressed IAGA files are supported. IAGA input requires --k9-limit. IH also\n"
+            "requires an SQ source; FMI requires --longitude. KASM/Hermanus accept\n"
+            "--iaga-sample-step 60 for minute input. The positional\n"
             "SQ-file argument is still accepted for compatibility; --sq-input is preferred."
         ),
     )
@@ -438,12 +439,18 @@ def main() -> int:
         default="iaf",
         help="input format (default: iaf)",
     )
-    parser.add_argument("--method", choices=("ih", "fmi", "kasm"), default="ih",
-                        help="K-index method (default: ih); FMI requires C; KASM requires C++11")
+    parser.add_argument("--method", choices=("ih", "fmi", "kasm", "hermanus"), default="ih",
+                        help="K-index method (default: ih); FMI requires C; KASM requires C++11; Hermanus uses Python")
+    parser.add_argument("--hermanus-mu", type=float, help="LRNS smoothing factor (default: 0.17)")
+    parser.add_argument("--hermanus-q-index", choices=("M", "E"), help="quiet pattern in middle/end of UT day (default: M)")
+    parser.add_argument("--hermanus-q-start", type=int, help="quiet-window start, 1-based UT minute (default: 300)")
+    parser.add_argument("--hermanus-q-end", type=int, help="quiet-window end, 1-based UT minute (default: 1009)")
+    parser.add_argument("--hermanus-q-factor", type=float, help="LRNS reference amplitude in nT (default: 0.01*K9)")
+    parser.add_argument("--hermanus-seed", type=int, help="reproducible guide-noise seed (default: 1)")
     parser.add_argument("--kasm-smoothing", type=float, default=1.0,
                         help="KASM smoothing factor (finite and positive; default: 1)")
     parser.add_argument("--iaga-sample-step", type=int, choices=(1, 60), default=1,
-                        help="KASM IAGA input cadence in seconds (default: 1; minute input: 60)")
+                        help="KASM/Hermanus IAGA input cadence in seconds (default: 1; minute input: 60)")
     parser.add_argument("--longitude", type=float,
                         help="observatory longitude in degrees east (FMI; defaults to IAF header)")
     parser.add_argument("--context-file", type=Path, action="append", default=[],
@@ -483,8 +490,16 @@ def main() -> int:
 
     if not math.isfinite(args.kasm_smoothing) or args.kasm_smoothing <= 0:
         parser.error("--kasm-smoothing must be finite and positive")
-    if args.method != "kasm" and (args.kasm_smoothing != 1.0 or args.iaga_sample_step != 1):
-        parser.error("--kasm-smoothing and --iaga-sample-step apply to --method kasm")
+    hermanus_options = {name: value for name, value in (
+        ("mu", args.hermanus_mu), ("qindex", args.hermanus_q_index),
+        ("qstart", args.hermanus_q_start), ("qend", args.hermanus_q_end),
+        ("qfactor", args.hermanus_q_factor), ("seed", args.hermanus_seed)) if value is not None}
+    if args.method != "hermanus" and hermanus_options:
+        parser.error("--hermanus-* options require --method hermanus")
+    if args.method != "kasm" and args.kasm_smoothing != 1.0:
+        parser.error("--kasm-smoothing applies to --method kasm")
+    if args.method not in ("kasm", "hermanus") and args.iaga_sample_step != 1:
+        parser.error("--iaga-sample-step applies to KASM/Hermanus")
     if not 0 < args.minimum_coverage <= 1:
         parser.error("--minimum-coverage must be greater than 0 and at most 1")
     if args.k9_limit is not None and (not math.isfinite(args.k9_limit) or args.k9_limit <= 0):
@@ -509,27 +524,31 @@ def main() -> int:
     ):
         parser.error("SQ output must use a different path from K-index outputs")
 
-    if args.method in ("fmi", "kasm"):
+    if args.method in ("fmi", "kasm", "hermanus"):
         inputs = [args.input_file.resolve(), *(p.resolve() for p in args.context_file)]
         if any(p and p.resolve() in inputs for p in (args.output, args.comprehensive_output)):
             parser.error("outputs must not overwrite input or context files")
     try:
-        if args.method in ("fmi", "kasm"):
+        if args.method in ("fmi", "kasm", "hermanus"):
             if args.method == "fmi":
                 import calculate_fmi_k_index as backend
-            else:
+            elif args.method == "kasm":
                 import calculate_kasm_k_index as backend
+            else:
+                import calculate_hermanus_k_index as backend
             label = args.method.upper()
             if args.sq_input or args.sq_file or args.sq_output or args.bootstrap_file:
                 parser.error(f"{label} fits its own daily quiet curve; SQ input/output and bootstrap files apply to IH")
-            if args.method == "kasm" and args.longitude is not None:
-                parser.error("--longitude applies to FMI; KASM uses no longitude parameter")
+            if args.method in ("kasm", "hermanus") and args.longitude is not None:
+                parser.error(f"--longitude applies to FMI; {label} uses no longitude parameter")
+            if args.method == "hermanus" and args.context_file:
+                parser.error("Hermanus uses one day; --context-file applies to FMI/KASM")
             if args.method == "fmi" and args.input_format == "iaga" and args.longitude is None:
                 parser.error("--longitude is required for FMI with IAGA input")
             def load_days(path):
                 if args.input_format == "iaf":
                     return backend.iaf_days(parse_month_file(path))
-                if args.method == "kasm":
+                if args.method in ("kasm", "hermanus"):
                     return backend.iaga_days(path, sample_step=args.iaga_sample_step)
                 return backend.iaga_days(path)
             days = load_days(args.input_file)
@@ -546,7 +565,8 @@ def main() -> int:
                         raise ValueError(f"conflicting {label} context for {day}")
                     days[day] = data
             options = (dict(step=60 if args.input_format == "iaf" else 1, longitude=args.longitude)
-                       if args.method == "fmi" else dict(smoothing=args.kasm_smoothing))
+                       if args.method == "fmi" else dict(smoothing=args.kasm_smoothing)
+                       if args.method == "kasm" else hermanus_options)
             rows = backend.calculate_days(days, targets, k9_nT=args.k9_limit,
                 minimum_coverage=args.minimum_coverage, **options)
             processed_days = len(targets)
@@ -556,6 +576,11 @@ def main() -> int:
             context_status = ("unavailable due to missing adjacent-day context"
                               if args.method == "fmi" else "calculated with reduced adjacent-day context")
             bootstrap_description = f"{label} method; {missing_context} day(s) {context_status}"
+            if args.method == "hermanus":
+                bootstrap_description = ("Hermanus LRNS; single-day fit; settings: "
+                    f"mu={hermanus_options.get('mu', .17)}, q-index={hermanus_options.get('qindex', 'M')}, "
+                    f"q-start={hermanus_options.get('qstart', 300)}, q-end={hermanus_options.get('qend', 1009)}, "
+                    f"q-factor={hermanus_options.get('qfactor', '0.01*K9')}, seed={hermanus_options.get('seed', 1)}")
         else:
             if args.context_file or args.longitude is not None:
                 parser.error("--context-file applies to FMI/KASM; --longitude applies to FMI")

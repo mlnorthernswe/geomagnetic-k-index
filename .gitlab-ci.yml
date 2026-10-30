@@ -11,7 +11,7 @@ unit-tests:
   before_script:
     - apt-get update && apt-get install -y --no-install-recommends g++
   script:
-    - python3 -m py_compile calculate_k_index.py calculate_fmi_k_index.py calculate_kasm_k_index.py run_pipeline.py
+    - python3 -m py_compile calculate_k_index.py calculate_fmi_k_index.py calculate_kasm_k_index.py calculate_hermanus_k_index.py run_pipeline.py
     - python3 -m unittest discover -s tests -v
 
 k-index-pipeline:
@@ -21,6 +21,7 @@ k-index-pipeline:
   script:
     - python3 run_pipeline.py --output-dir artifacts/k-index --save-generated-sq
     - python3 run_pipeline.py --method kasm --output-dir artifacts/k-index
+    - python3 run_pipeline.py --method hermanus --output-dir artifacts/k-index
   artifacts:
     name: k-index-pipeline-outputs
     paths:

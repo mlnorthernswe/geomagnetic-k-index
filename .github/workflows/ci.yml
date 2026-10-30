@@ -21,7 +21,7 @@ jobs:
           python-version: "3.12"
 
       - name: Syntax & bytecode check
-        run: python3 -m py_compile calculate_k_index.py calculate_fmi_k_index.py calculate_kasm_k_index.py run_pipeline.py
+        run: python3 -m py_compile calculate_k_index.py calculate_fmi_k_index.py calculate_kasm_k_index.py calculate_hermanus_k_index.py run_pipeline.py
 
       - name: Run unit & regression tests
         run: python3 -m unittest discover -s tests -v
@@ -31,6 +31,9 @@ jobs:
 
       - name: Run KASM pipeline
         run: python3 run_pipeline.py --method kasm --output-dir artifacts/k-index
+
+      - name: Run Hermanus LRNS pipeline
+        run: python3 run_pipeline.py --method hermanus --output-dir artifacts/k-index
 
       - name: Upload K-index & SQ pipeline outputs
         uses: actions/upload-artifact@v4
