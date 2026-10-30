@@ -438,12 +438,16 @@ def main() -> int:
         default="iaf",
         help="input format (default: iaf)",
     )
-    parser.add_argument("--method", choices=("ih", "fmi"), default="ih",
-                        help="K-index method (default: ih); FMI requires a C compiler")
+    parser.add_argument("--method", choices=("ih", "fmi", "kasm"), default="ih",
+                        help="K-index method (default: ih); FMI requires C; KASM requires C++11")
+    parser.add_argument("--kasm-smoothing", type=float, default=1.0,
+                        help="KASM smoothing factor (finite and positive; default: 1)")
+    parser.add_argument("--iaga-sample-step", type=int, choices=(1, 60), default=1,
+                        help="KASM IAGA input cadence in seconds (default: 1; minute input: 60)")
     parser.add_argument("--longitude", type=float,
                         help="observatory longitude in degrees east (FMI; defaults to IAF header)")
     parser.add_argument("--context-file", type=Path, action="append", default=[],
-                        help="additional same-station input file for FMI adjacent-day context; repeatable")
+                        help="additional same-station input file for FMI/KASM adjacent-day context; repeatable")
     parser.add_argument("--sq-input", type=Path, help="existing 24-row SQ file in pT")
     parser.add_argument("--sq-output", type=Path, help="write the SQ curve used by this run in pT")
     parser.add_argument(
@@ -477,6 +481,10 @@ def main() -> int:
     )
     args = parser.parse_args()
 
+    if not math.isfinite(args.kasm_smoothing) or args.kasm_smoothing <= 0:
+        parser.error("--kasm-smoothing must be finite and positive")
+    if args.method != "kasm" and (args.kasm_smoothing != 1.0 or args.iaga_sample_step != 1):
+        parser.error("--kasm-smoothing and --iaga-sample-step apply to --method kasm")
     if not 0 < args.minimum_coverage <= 1:
         parser.error("--minimum-coverage must be greater than 0 and at most 1")
     if args.k9_limit is not None and (not math.isfinite(args.k9_limit) or args.k9_limit <= 0):
@@ -501,49 +509,56 @@ def main() -> int:
     ):
         parser.error("SQ output must use a different path from K-index outputs")
 
-    if args.method == "fmi":
+    if args.method in ("fmi", "kasm"):
         inputs = [args.input_file.resolve(), *(p.resolve() for p in args.context_file)]
         if any(p and p.resolve() in inputs for p in (args.output, args.comprehensive_output)):
-            parser.error("FMI outputs must not overwrite input or context files")
+            parser.error("outputs must not overwrite input or context files")
     try:
-        if args.method == "fmi":
-            import calculate_fmi_k_index as fmi
-            if args.sq_input or args.sq_file or args.sq_output or args.bootstrap_file:
-                parser.error("FMI fits its own daily quiet curve; SQ input/output and bootstrap files apply to IH")
-            if args.input_format == "iaga" and args.longitude is None:
-                parser.error("--longitude is required for FMI with IAGA input")
-            if args.input_format == "iaf":
-                records = parse_month_file(args.input_file)
-                days = fmi.iaf_days(records)
+        if args.method in ("fmi", "kasm"):
+            if args.method == "fmi":
+                import calculate_fmi_k_index as backend
             else:
-                days = fmi.iaga_days(args.input_file)
+                import calculate_kasm_k_index as backend
+            label = args.method.upper()
+            if args.sq_input or args.sq_file or args.sq_output or args.bootstrap_file:
+                parser.error(f"{label} fits its own daily quiet curve; SQ input/output and bootstrap files apply to IH")
+            if args.method == "kasm" and args.longitude is not None:
+                parser.error("--longitude applies to FMI; KASM uses no longitude parameter")
+            if args.method == "fmi" and args.input_format == "iaga" and args.longitude is None:
+                parser.error("--longitude is required for FMI with IAGA input")
+            def load_days(path):
+                if args.input_format == "iaf":
+                    return backend.iaf_days(parse_month_file(path))
+                if args.method == "kasm":
+                    return backend.iaga_days(path, sample_step=args.iaga_sample_step)
+                return backend.iaga_days(path)
+            days = load_days(args.input_file)
             targets = list(days)
             for context_path in args.context_file:
-                context = (fmi.iaf_days(parse_month_file(context_path))
-                           if args.input_format == "iaf" else fmi.iaga_days(context_path))
+                context = load_days(context_path)
                 if args.input_format == "iaf":
                     identity = next(iter(days.values()))[2]
                     if any((data[2][0], data[2][2], data[2][3]) !=
                            (identity[0], identity[2], identity[3]) for data in context.values()):
-                        raise ValueError("FMI context must belong to the same station and coordinates")
+                        raise ValueError(f"{label} context must belong to the same station and coordinates")
                 for day, data in context.items():
                     if day in days and days[day] != data:
-                        raise ValueError(f"conflicting FMI context for {day}")
+                        raise ValueError(f"conflicting {label} context for {day}")
                     days[day] = data
-            rows = fmi.calculate_days(days, targets,
-                step=60 if args.input_format == "iaf" else 1,
-                k9_nT=args.k9_limit, longitude=args.longitude,
-                minimum_coverage=args.minimum_coverage)
+            options = (dict(step=60 if args.input_format == "iaf" else 1, longitude=args.longitude)
+                       if args.method == "fmi" else dict(smoothing=args.kasm_smoothing))
+            rows = backend.calculate_days(days, targets, k9_nT=args.k9_limit,
+                minimum_coverage=args.minimum_coverage, **options)
             processed_days = len(targets)
             from datetime import timedelta
             missing_context = sum(any(day + timedelta(days=n) not in days for n in (-1, 1))
                                   for day in targets)
-            bootstrap_description = (
-                f"FMI method; {missing_context} day(s) unavailable due to missing adjacent-day context"
-            )
+            context_status = ("unavailable due to missing adjacent-day context"
+                              if args.method == "fmi" else "calculated with reduced adjacent-day context")
+            bootstrap_description = f"{label} method; {missing_context} day(s) {context_status}"
         else:
             if args.context_file or args.longitude is not None:
-                parser.error("--context-file and --longitude apply to --method fmi")
+                parser.error("--context-file applies to FMI/KASM; --longitude applies to FMI")
             records = parse_month_file(args.input_file) if args.input_format == "iaf" else None
             sq_input = args.sq_input or args.sq_file
             bootstrap_path: Path | None = None

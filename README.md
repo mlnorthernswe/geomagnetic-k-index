@@ -1,10 +1,10 @@
-# INTERMAGNET K-index calculator
+# Geomagnetic K-index calculator
 
 A standard-library Python tool for estimating three-hour local K indices from INTERMAGNET IAF monthly `.BIN` files. Example station data for BEL, HYB, KIR, and WIC are included.
 
 ## Requirements
 
-Python 3.10 or newer. No third-party Python packages are required. The optional FMI backend also requires a C compiler (`cc`, or set `CC`) on a 64-bit Unix system.
+Python 3.10 or newer. No third-party Python packages are required. The optional FMI backend requires a C compiler (`cc`, or set `CC`) on a 64-bit Unix system. KASM requires a C++11 compiler (`c++`, or set `CXX`) on Unix.
 
 ## Quick start
 
@@ -93,11 +93,67 @@ individual station configuration; `--method` overrides configuration. Optional
 `-FMI` filenames, while IH outputs keep their existing `-IH` filenames.
 `--save-generated-sq` applies only to IH.
 
+## Select the KASM method
+
+KASM (Adaptive Smoothing) is a third selectable method. This tool uses the author's
+[KASM 1.11 C++ implementation](https://magneto.igf.edu.pl/soft/kasm/), linked from
+[INTERMAGNET](https://intermagnet.org/software.html), with original source and
+integration details in [vendor/kasm/README.md](vendor/kasm/README.md).
+IH remains the default.
+
+```bash
+python3 calculate_k_index.py KIR/KIR23DEC.BIN --method kasm \
+  --context-file KIR/KIR23NOV.BIN \
+  -o /tmp/KIR23DEC-k-index-KASM.csv
+
+python3 run_pipeline.py --method kasm --output-dir /tmp/kasm-results
+```
+
+KASM first estimates a smooth daily curve by penalizing second differences,
+then uses hourly disturbance ranges to adjust weights and fit again. The
+filtered three-hour ranges are scaled using the station's K9 limit. KASM caps
+combined K at the combined K from the unfiltered signal, as in the author's
+program; consequently `k` can be smaller than `max(k_x, k_y)`. Component ranges
+and component K columns describe the filtered residuals.
+
+KASM uses **one-minute means**, with up to three hours from each available
+neighboring day. `--context-file` supplies neighboring data for the calculator;
+the pipeline uses available station months automatically. At missing neighbors,
+KASM follows the author's reduced-context behavior and still calculates indices.
+The summary reports how many days have reduced context. KASM does not require
+longitude, an SQ file, or an annual H value when using X/Y components.
+
+For one-minute IAGA input, provide its cadence explicitly:
+
+```bash
+python3 calculate_k_index.py station-three-days.min --input-format iaga \
+  --method kasm --iaga-sample-step 60 --k9-limit 500 \
+  -o /tmp/station-KASM.csv
+```
+
+For one-second IAGA input, omit `--iaga-sample-step` (default: 1). KASM averages
+each UTC minute; a component needs all 60 valid seconds, otherwise that minute
+is marked missing. Partial minutes are not treated as complete means. The
+coverage columns and `--minimum-coverage` refer to valid minute means before
+gap filling. The native routines fill interior gaps of up to six consecutive
+missing minutes. Longer gaps and leading/trailing gaps invalidate touched
+intervals; both components must be valid for combined K.
+
+`--kasm-smoothing FACTOR` adjusts the default smoothing (finite and positive;
+default 1). In pipeline configuration, set `"method": "kasm"` and optionally
+`"kasm_smoothing": 1.0` in station entries or defaults. Pipeline outputs use
+`-KASM` filenames. SQ bootstrap/output options apply only to IH. No sources
+are downloaded at runtime.
+
+Validation compares 1,240 interval values with a separately compiled, complete
+copy of the author's KASM program, covering all four example stations and two
+smoothing settings. [Reference fixture provenance](tests/data/kasm-reference.md).
+
 ## Options
 
 Run `python3 calculate_k_index.py --help` for all options.
 
-- `--method {ih,fmi}`: select the calculation method (default: `ih`).
+- `--method {ih,fmi,kasm}`: select the calculation method (default: `ih`).
 - `--sq-input PATH`: use an existing 24-row SQ file.
 - `--sq-output PATH`: save the SQ curve used by this run in the same 24-row format.
 - `--bootstrap-file PATH`: use another IAF month file to construct the SQ curve; defaults to the month being processed.
@@ -111,7 +167,7 @@ Run `python3 calculate_k_index.py --help` for all options.
 
 ## Output and limitations
 
-The CSV includes X/Y deflection ranges, coverage, component K values, combined K, and comparisons with K values embedded in the IAF file when available. The combined K is the larger of the separately classified X and Y indices. The comprehensive output writes eight K values per date, `-` for unavailable intervals, parenthesized partial sums, and `-1` when no interval K value is available.
+The CSV includes X/Y deflection ranges, coverage, component K values, combined K, and comparisons with K values embedded in the IAF file when available. For IH and FMI, the combined K is the larger of the separately classified X and Y indices. KASM additionally caps combined K at its unfiltered value. The comprehensive output writes eight K values per date, `-` for unavailable intervals, parenthesized partial sums, and `-1` when no interval K value is available.
 
 The default IAF path uses one-minute means, while the original SQ/K method described in the accompanying algorithm uses one-second samples. IAGA input can retain one-second resolution; IAF-derived K values remain estimates and may not match the embedded values exactly.
 

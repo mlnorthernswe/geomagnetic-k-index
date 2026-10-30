@@ -21,13 +21,16 @@ jobs:
           python-version: "3.12"
 
       - name: Syntax & bytecode check
-        run: python3 -m py_compile calculate_k_index.py run_pipeline.py tests/test_ih_k_index.py
+        run: python3 -m py_compile calculate_k_index.py calculate_fmi_k_index.py calculate_kasm_k_index.py run_pipeline.py
 
       - name: Run unit & regression tests
         run: python3 -m unittest discover -s tests -v
 
       - name: Run multi-station K-index pipeline
         run: python3 run_pipeline.py --output-dir artifacts/k-index --save-generated-sq
+
+      - name: Run KASM pipeline
+        run: python3 run_pipeline.py --method kasm --output-dir artifacts/k-index
 
       - name: Upload K-index & SQ pipeline outputs
         uses: actions/upload-artifact@v4

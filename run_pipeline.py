@@ -111,13 +111,15 @@ def run_station_pipeline(
 
     months = discover_station_months(station_code, station_dir)
     method = str(method_override or station_cfg.get("method") or defaults.get("method", "ih"))
-    if method not in ("ih", "fmi"):
+    if method not in ("ih", "fmi", "kasm"):
         raise ValueError(f"unknown K-index method: {method}")
-    if method == "fmi":
+    if method in ("fmi", "kasm"):
         if save_generated_sq:
-            raise ValueError("--save-generated-sq applies to IH; FMI fits a daily quiet curve")
-        return run_fmi_months(months, target_dir, k9_limit, minimum_coverage,
-                              station_cfg.get("longitude", defaults.get("longitude")), dry_run)
+            raise ValueError("--save-generated-sq applies to IH; FMI/KASM fit daily quiet curves")
+        return run_adaptive_months(months, target_dir, k9_limit, minimum_coverage,
+                              station_cfg.get("longitude", defaults.get("longitude")), dry_run,
+                              method=method,
+                              smoothing=float(station_cfg.get("kasm_smoothing", defaults.get("kasm_smoothing", 1.0))))
     generated_sq_cache: dict[str, tuple[dict[str, tuple[float, ...]], str]] = {}
     summaries: list[MonthRunSummary] = []
 
@@ -210,17 +212,22 @@ def run_station_pipeline(
     return summaries
 
 
-def run_fmi_months(months, target_dir, k9_limit, minimum_coverage, longitude, dry_run):
+def run_adaptive_months(months, target_dir, k9_limit, minimum_coverage, longitude, dry_run,
+                   method="fmi", smoothing=1.0):
     """Use all available station months as context, without bridging date gaps."""
-    import calculate_fmi_k_index as fmi
+    if method == "fmi":
+        import calculate_fmi_k_index as backend
+    else:
+        import calculate_kasm_k_index as backend
     from datetime import timedelta
 
-    days = fmi.iaf_days([record for month in months for record in month.records])
+    days = backend.iaf_days([record for month in months for record in month.records])
     if not days:
         return []
-    rows = fmi.calculate_days(days, k9_nT=k9_limit,
-        longitude=None if longitude is None else float(longitude),
-        minimum_coverage=minimum_coverage)
+    options = (dict(longitude=None if longitude is None else float(longitude))
+               if method == "fmi" else dict(smoothing=smoothing))
+    rows = backend.calculate_days(days, k9_nT=k9_limit,
+        minimum_coverage=minimum_coverage, **options)
     by_date = {}
     for row in rows:
         by_date.setdefault(row["date"], []).append(row)
@@ -229,8 +236,8 @@ def run_fmi_months(months, target_dir, k9_limit, minimum_coverage, longitude, dr
         targets = [datetime.strptime(str(record[1]), "%Y%j").date() for record in month.records]
         month_rows = [row for day in targets for row in by_date[day.isoformat()]]
         stem = month.path.stem.upper()
-        csv_path = target_dir / f"{stem}-k-index-FMI.csv"
-        comp_path = target_dir / f"{stem}-comprehensive-FMI.txt"
+        csv_path = target_dir / f"{stem}-k-index-{method.upper()}.csv"
+        comp_path = target_dir / f"{stem}-comprehensive-{method.upper()}.txt"
         if not dry_run:
             with csv_path.open("w", newline="", encoding="utf-8") as output:
                 ih.write_csv(month_rows, output)
@@ -240,7 +247,8 @@ def run_fmi_months(months, target_dir, k9_limit, minimum_coverage, longitude, dr
         missing = sum(any(day + timedelta(days=n) not in days for n in (-1, 1)) for day in targets)
         summaries.append(MonthRunSummary(
             station=month.station, yyyymm=month.yyyymm, input_path=month.path,
-            sq_source=f"FMI daily fit ({missing}d no context)", days=len(targets),
+            sq_source=(f"FMI daily fit ({missing}d no context)" if method == "fmi"
+                       else f"KASM fit ({missing}d reduced context)"), days=len(targets),
             intervals=len(month_rows), matched_intervals=sum(r["matches_stored"] == 1 for r in comparisons),
             comparable_intervals=len(comparisons), csv_output=csv_path,
             comprehensive_output=comp_path, sq_output=None))
@@ -290,7 +298,7 @@ def main(argv: list[str] | None = None) -> int:
         action="store_true",
         help="compute and report pipeline steps without writing files",
     )
-    parser.add_argument("--method", choices=("ih", "fmi"),
+    parser.add_argument("--method", choices=("ih", "fmi", "kasm"),
                         help="override the K-index method (default: config or ih)")
     args = parser.parse_args(argv)
 
