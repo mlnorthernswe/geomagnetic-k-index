@@ -340,7 +340,7 @@ python3 -m unittest discover -s tests -v
 
 CI/CD configurations for both GitHub Actions (`.github/workflows/ci.yml`) and GitLab CI (`.gitlab-ci.yml`) automatically run the test suite, execute `run_pipeline.py`, and build `K-index-calculations-algorithm-revised.pdf`.
 
-## Algorithm reference
+## Algorithm reference for IH-method
 
 - `K-index-calculations-algorithm.pdf`: original algorithm description.
 - `K-index-calculations-algorithm-revised.pdf`: revised description with bootstrap guidance.
