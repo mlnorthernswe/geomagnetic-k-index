@@ -292,11 +292,30 @@ path relative to the configuration directory), `usgs_mean_minutes`, and
 See [reference provenance and portability repairs](vendor/usgs/README.md) for
 numerical validation and the defined handling of archived edge-case bugs.
 
+## Running multiple methods at once
+
+Both `calculate_k_index.py` and `run_pipeline.py` accept multiple methods in `--method` (space-separated, comma-separated, repeated, or `all`):
+
+```bash
+# Calculate IH, FMI, and KASM on KIR December 2023:
+# writes one combined summary CSV and separate *-IH.txt, *-FMI.txt, *-KASM.txt comprehensive files
+python3 calculate_k_index.py KIR/KIR23DEC.BIN \
+  --method ih fmi kasm \
+  --context-file KIR/KIR23NOV.BIN \
+  --sq-input KIR/202311KIRsq \
+  -o /tmp/KIR23DEC-k-index-summary.csv \
+  --comprehensive-output /tmp/KIR23DEC-comprehensive.txt
+
+# Run all five methods in the pipeline across stations:
+# writes <STEM>-k-index-summary.csv and <STEM>-comprehensive-<METHOD>.txt per month
+python3 run_pipeline.py --method all --output-dir /tmp/all-methods
+```
+
 ## Options
 
 Run `python3 calculate_k_index.py --help` for all options.
 
-- `--method {ih,fmi,kasm,hermanus,usgs}`: select the calculation method (default: `ih`).
+- `--method METHOD [METHOD ...]`: select one or more calculation methods (`ih`, `fmi`, `kasm`, `hermanus`, `usgs`, or `all`; default: `ih`). When multiple methods are chosen, `-o` writes a single combined summary CSV and `--comprehensive-output` writes a separate `-<METHOD>` file for each chosen method.
 - `--sq-input PATH`: use an existing 24-row SQ file.
 - `--sq-output PATH`: save the SQ curve used by this run in the same 24-row format.
 - `--bootstrap-file PATH`: use another IAF month file to construct the SQ curve; defaults to the month being processed.

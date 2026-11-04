@@ -78,58 +78,20 @@ def discover_station_months(station: str, directory: Path) -> list[MonthInput]:
     return months
 
 
-def run_station_pipeline(
-    station: str,
-    station_cfg: dict[str, object],
-    defaults: dict[str, object],
-    base_dir: Path,
-    output_dir: Path | None = None,
-    estimator_override: str | None = None,
-    save_generated_sq: bool = False,
-    dry_run: bool = False,
-    method_override: str | None = None,
-) -> list[MonthRunSummary]:
-    station_code = station.upper()
-    station_dir = base_dir / str(station_cfg.get("directory", station_code))
-    target_dir = (output_dir / station_code) if output_dir else station_dir
-    if not dry_run:
-        target_dir.mkdir(parents=True, exist_ok=True)
-
-    estimator = str(
-        estimator_override
-        or station_cfg.get("sq_estimator")
-        or defaults.get("sq_estimator", "median")
-    )
-    bootstrap_days = int(
-        station_cfg.get("bootstrap_days", defaults.get("bootstrap_days", 10))
-    )
-    minimum_coverage = float(
-        station_cfg.get("minimum_coverage", defaults.get("minimum_coverage", 0.9))
-    )
-    k9_limit_raw = station_cfg.get("k9_limit", defaults.get("k9_limit"))
-    k9_limit = float(k9_limit_raw) if k9_limit_raw is not None else None
-
-    months = discover_station_months(station_code, station_dir)
-    method = str(method_override or station_cfg.get("method") or defaults.get("method", "ih"))
-    if method not in ("ih", "fmi", "kasm", "hermanus", "usgs"):
-        raise ValueError(f"unknown K-index method: {method}")
-    if method in ("fmi", "kasm", "hermanus", "usgs"):
-        if save_generated_sq:
-            raise ValueError("--save-generated-sq applies to IH; FMI/KASM/Hermanus/USGS fit daily quiet curves")
-        return run_adaptive_months(months, target_dir, k9_limit, minimum_coverage,
-                              station_cfg.get("longitude", defaults.get("longitude")), dry_run,
-                              method=method,
-                              usgs_options={"parameters": ((base_dir / str(station_cfg.get("usgs_parameters", defaults.get("usgs_parameters"))))
-                                   if station_cfg.get("usgs_parameters", defaults.get("usgs_parameters")) else None),
-                                   "nppm": int(station_cfg.get("usgs_mean_minutes", defaults.get("usgs_mean_minutes", 60))),
-                                   "h_reference": station_cfg.get("usgs_h_reference", defaults.get("usgs_h_reference"))},
-                              hermanus_options={name: station_cfg.get("hermanus_" + key, defaults.get("hermanus_" + key))
-                                  for name, key in (("mu", "mu"), ("qindex", "q_index"), ("qstart", "q_start"),
-                                      ("qend", "q_end"), ("qfactor", "q_factor"), ("seed", "seed"))
-                                  if station_cfg.get("hermanus_" + key, defaults.get("hermanus_" + key)) is not None},
-                              smoothing=float(station_cfg.get("kasm_smoothing", defaults.get("kasm_smoothing", 1.0))))
+def _compute_ih_station_months(
+    station_code: str,
+    months: list[MonthInput],
+    station_dir: Path,
+    target_dir: Path,
+    estimator: str,
+    bootstrap_days: int,
+    minimum_coverage: float,
+    k9_limit: float | None,
+    save_generated_sq: bool,
+    dry_run: bool,
+) -> dict[str, tuple[list[dict[str, object]], str, Path | None]]:
     generated_sq_cache: dict[str, tuple[dict[str, tuple[float, ...]], str]] = {}
-    summaries: list[MonthRunSummary] = []
+    results: dict[str, tuple[list[dict[str, object]], str, Path | None]] = {}
 
     for month_input in months:
         prev_sq_name = f"{month_input.prev_yyyymm}{station_code}sq"
@@ -163,7 +125,6 @@ def run_station_pipeline(
             )
         ]
 
-        # Prepare this month's SQ curve to chain into month m + 1 if needed.
         curr_sq_name = f"{month_input.yyyymm}{station_code}sq"
         existing_curr_sq = next(
             (p for p in (target_dir / curr_sq_name, station_dir / curr_sq_name) if p.is_file()),
@@ -188,41 +149,21 @@ def run_station_pipeline(
                 if not dry_run:
                     ih.write_sq_curve(next_sq, sq_output_path)
 
-        stem = month_input.path.stem.upper()
-        csv_path = target_dir / f"{stem}-k-index-IH.csv"
-        comp_path = target_dir / f"{stem}-comprehensive-IH.txt"
+        results[month_input.yyyymm] = (rows, sq_source, sq_output_path)
 
-        if not dry_run:
-            with csv_path.open("w", newline="", encoding="utf-8") as csv_file:
-                ih.write_csv(rows, csv_file)
-            with comp_path.open("w", encoding="ascii", newline="\n") as comp_file:
-                ih.write_comprehensive(rows, comp_file)
-
-        comparisons = [row for row in rows if row["matches_stored"] != ""]
-        matches = sum(row["matches_stored"] == 1 for row in comparisons)
-
-        summaries.append(
-            MonthRunSummary(
-                station=station_code,
-                yyyymm=month_input.yyyymm,
-                input_path=month_input.path,
-                sq_source=sq_source,
-                days=len(month_input.records),
-                intervals=len(rows),
-                matched_intervals=matches,
-                comparable_intervals=len(comparisons),
-                csv_output=csv_path,
-                comprehensive_output=comp_path,
-                sq_output=sq_output_path,
-            )
-        )
-
-    return summaries
+    return results
 
 
-def run_adaptive_months(months, target_dir, k9_limit, minimum_coverage, longitude, dry_run,
-                   method="fmi", smoothing=1.0, hermanus_options=None, usgs_options=None):
-    """Use all available station months as context, without bridging date gaps."""
+def _compute_adaptive_station_months(
+    months: list[MonthInput],
+    k9_limit: float | None,
+    minimum_coverage: float,
+    longitude: object,
+    method: str,
+    smoothing: float = 1.0,
+    hermanus_options: dict[str, object] | None = None,
+    usgs_options: dict[str, object] | None = None,
+) -> dict[str, tuple[list[dict[str, object]], str, Path | None]]:
     if method == "fmi":
         import calculate_fmi_k_index as backend
     elif method == "kasm":
@@ -235,40 +176,178 @@ def run_adaptive_months(months, target_dir, k9_limit, minimum_coverage, longitud
 
     days = backend.iaf_days([record for month in months for record in month.records])
     if not days:
-        return []
-    options = (dict(longitude=None if longitude is None else float(longitude))
-               if method == "fmi" else dict(smoothing=smoothing)
-               if method == "kasm" else (hermanus_options or {}) if method == "hermanus"
-               else (usgs_options or {}))
-    rows = backend.calculate_days(days, k9_nT=k9_limit,
-        minimum_coverage=minimum_coverage, **options)
-    by_date = {}
+        return {}
+    options = (
+        dict(longitude=None if longitude is None else float(longitude))
+        if method == "fmi"
+        else dict(smoothing=smoothing)
+        if method == "kasm"
+        else (hermanus_options or {})
+        if method == "hermanus"
+        else (usgs_options or {})
+    )
+    rows = backend.calculate_days(
+        days, k9_nT=k9_limit, minimum_coverage=minimum_coverage, **options
+    )
+    by_date: dict[str, list[dict[str, object]]] = {}
     for row in rows:
-        by_date.setdefault(row["date"], []).append(row)
-    summaries = []
+        by_date.setdefault(str(row["date"]), []).append(row)
+
+    results: dict[str, tuple[list[dict[str, object]], str, Path | None]] = {}
     for month in months:
         targets = [datetime.strptime(str(record[1]), "%Y%j").date() for record in month.records]
         month_rows = [row for day in targets for row in by_date[day.isoformat()]]
-        stem = month.path.stem.upper()
-        csv_path = target_dir / f"{stem}-k-index-{method.upper()}.csv"
-        comp_path = target_dir / f"{stem}-comprehensive-{method.upper()}.txt"
-        if not dry_run:
-            with csv_path.open("w", newline="", encoding="utf-8") as output:
-                ih.write_csv(month_rows, output)
-            with comp_path.open("w", encoding="ascii", newline="\n") as output:
-                ih.write_comprehensive(month_rows, output)
-        comparisons = [row for row in month_rows if row["matches_stored"] != ""]
         missing = sum(any(day + timedelta(days=n) not in days for n in (-1, 1)) for day in targets)
-        summaries.append(MonthRunSummary(
-            station=month.station, yyyymm=month.yyyymm, input_path=month.path,
-            sq_source=(f"FMI daily fit ({missing}d no context)" if method == "fmi"
-                       else f"KASM fit ({missing}d reduced context)" if method == "kasm"
-                       else "Hermanus LRNS single-day fit" if method == "hermanus"
-                       else "USGS H/D calibration file" if options.get("parameters") is not None
-                       else "USGS monthly H/D calibration"), days=len(targets),
-            intervals=len(month_rows), matched_intervals=sum(r["matches_stored"] == 1 for r in comparisons),
-            comparable_intervals=len(comparisons), csv_output=csv_path,
-            comprehensive_output=comp_path, sq_output=None))
+        sq_source = (
+            f"FMI daily fit ({missing}d no context)"
+            if method == "fmi"
+            else f"KASM fit ({missing}d reduced context)"
+            if method == "kasm"
+            else "Hermanus LRNS single-day fit"
+            if method == "hermanus"
+            else "USGS H/D calibration file"
+            if options.get("parameters") is not None
+            else "USGS monthly H/D calibration"
+        )
+        results[month.yyyymm] = (month_rows, sq_source, None)
+    return results
+
+
+def run_station_pipeline(
+    station: str,
+    station_cfg: dict[str, object],
+    defaults: dict[str, object],
+    base_dir: Path,
+    output_dir: Path | None = None,
+    estimator_override: str | None = None,
+    save_generated_sq: bool = False,
+    dry_run: bool = False,
+    method_override: str | list[str] | tuple[str, ...] | None = None,
+) -> list[MonthRunSummary]:
+    station_code = station.upper()
+    station_dir = base_dir / str(station_cfg.get("directory", station_code))
+    target_dir = (output_dir / station_code) if output_dir else station_dir
+    if not dry_run:
+        target_dir.mkdir(parents=True, exist_ok=True)
+
+    estimator = str(
+        estimator_override
+        or station_cfg.get("sq_estimator")
+        or defaults.get("sq_estimator", "median")
+    )
+    bootstrap_days = int(
+        station_cfg.get("bootstrap_days", defaults.get("bootstrap_days", 10))
+    )
+    minimum_coverage = float(
+        station_cfg.get("minimum_coverage", defaults.get("minimum_coverage", 0.9))
+    )
+    k9_limit_raw = station_cfg.get("k9_limit", defaults.get("k9_limit"))
+    k9_limit = float(k9_limit_raw) if k9_limit_raw is not None else None
+
+    months = discover_station_months(station_code, station_dir)
+    raw_method = method_override or station_cfg.get("method") or defaults.get("method", "ih")
+    methods = ih.parse_methods(raw_method, default="ih")
+    multi_method = len(methods) > 1
+
+    if save_generated_sq and "ih" not in methods:
+        raise ValueError("--save-generated-sq applies to IH; FMI/KASM/Hermanus/USGS fit daily quiet curves")
+
+    usgs_options = {
+        "parameters": (
+            (base_dir / str(station_cfg.get("usgs_parameters", defaults.get("usgs_parameters"))))
+            if station_cfg.get("usgs_parameters", defaults.get("usgs_parameters"))
+            else None
+        ),
+        "nppm": int(station_cfg.get("usgs_mean_minutes", defaults.get("usgs_mean_minutes", 60))),
+        "h_reference": station_cfg.get("usgs_h_reference", defaults.get("usgs_h_reference")),
+    }
+    hermanus_options = {
+        name: station_cfg.get("hermanus_" + key, defaults.get("hermanus_" + key))
+        for name, key in (
+            ("mu", "mu"),
+            ("qindex", "q_index"),
+            ("qstart", "q_start"),
+            ("qend", "q_end"),
+            ("qfactor", "q_factor"),
+            ("seed", "seed"),
+        )
+        if station_cfg.get("hermanus_" + key, defaults.get("hermanus_" + key)) is not None
+    }
+    smoothing = float(station_cfg.get("kasm_smoothing", defaults.get("kasm_smoothing", 1.0)))
+    longitude = station_cfg.get("longitude", defaults.get("longitude"))
+
+    method_results: dict[str, dict[str, tuple[list[dict[str, object]], str, Path | None]]] = {}
+    for method in methods:
+        if method == "ih":
+            method_results[method] = _compute_ih_station_months(
+                station_code=station_code,
+                months=months,
+                station_dir=station_dir,
+                target_dir=target_dir,
+                estimator=estimator,
+                bootstrap_days=bootstrap_days,
+                minimum_coverage=minimum_coverage,
+                k9_limit=k9_limit,
+                save_generated_sq=save_generated_sq,
+                dry_run=dry_run,
+            )
+        else:
+            method_results[method] = _compute_adaptive_station_months(
+                months=months,
+                k9_limit=k9_limit,
+                minimum_coverage=minimum_coverage,
+                longitude=longitude,
+                method=method,
+                smoothing=smoothing,
+                hermanus_options=hermanus_options,
+                usgs_options=usgs_options,
+            )
+
+    summaries: list[MonthRunSummary] = []
+    for month_input in months:
+        stem = month_input.path.stem.upper()
+        if multi_method:
+            summary_csv_path = target_dir / f"{stem}-k-index-summary.csv"
+            rows_by_method = {
+                m: method_results[m][month_input.yyyymm][0] for m in methods
+            }
+            if not dry_run:
+                with summary_csv_path.open("w", newline="", encoding="utf-8") as csv_file:
+                    ih.write_multi_method_csv(rows_by_method, csv_file)
+
+        for method in methods:
+            rows, sq_source, sq_output_path = method_results[method][month_input.yyyymm]
+            comp_path = target_dir / f"{stem}-comprehensive-{method.upper()}.txt"
+            csv_path = (
+                target_dir / f"{stem}-k-index-summary.csv"
+                if multi_method
+                else target_dir / f"{stem}-k-index-{method.upper()}.csv"
+            )
+            if not dry_run:
+                if not multi_method:
+                    with csv_path.open("w", newline="", encoding="utf-8") as csv_file:
+                        ih.write_csv(rows, csv_file)
+                with comp_path.open("w", encoding="ascii", newline="\n") as comp_file:
+                    ih.write_comprehensive(rows, comp_file)
+
+            comparisons = [row for row in rows if row["matches_stored"] != ""]
+            matches = sum(row["matches_stored"] == 1 for row in comparisons)
+            summaries.append(
+                MonthRunSummary(
+                    station=station_code,
+                    yyyymm=month_input.yyyymm,
+                    input_path=month_input.path,
+                    sq_source=sq_source,
+                    days=len(month_input.records),
+                    intervals=len(rows),
+                    matched_intervals=matches,
+                    comparable_intervals=len(comparisons),
+                    csv_output=csv_path,
+                    comprehensive_output=comp_path,
+                    sq_output=sq_output_path,
+                )
+            )
+
     return summaries
 
 
@@ -315,8 +394,13 @@ def main(argv: list[str] | None = None) -> int:
         action="store_true",
         help="compute and report pipeline steps without writing files",
     )
-    parser.add_argument("--method", choices=("ih", "fmi", "kasm", "hermanus", "usgs"),
-                        help="override the K-index method (default: config or ih)")
+    parser.add_argument(
+        "--method",
+        nargs="+",
+        action="extend",
+        metavar="METHOD",
+        help="one or more K-index methods (ih, fmi, kasm, hermanus, usgs, or all; default: config or ih)",
+    )
     args = parser.parse_args(argv)
 
     base_dir = args.config.resolve().parent

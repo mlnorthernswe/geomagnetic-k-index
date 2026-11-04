@@ -366,6 +366,49 @@ def parse_month_file(path: Path) -> list[tuple[int, ...]]:
     return records
 
 
+SUPPORTED_METHODS = ("ih", "fmi", "kasm", "hermanus", "usgs")
+
+
+def parse_methods(
+    raw: str | list[str] | tuple[str, ...] | None,
+    default: str | None = "ih",
+) -> list[str]:
+    if raw is None:
+        return [default] if default else []
+    items = [raw] if isinstance(raw, str) else list(raw)
+    methods: list[str] = []
+    for item in items:
+        for token in str(item).replace(",", " ").split():
+            name = token.strip().lower()
+            if not name:
+                continue
+            if name == "all":
+                for candidate in SUPPORTED_METHODS:
+                    if candidate not in methods:
+                        methods.append(candidate)
+            elif name in SUPPORTED_METHODS:
+                if name not in methods:
+                    methods.append(name)
+            else:
+                raise ValueError(
+                    f"unknown K-index method '{token}'; choose from {', '.join(SUPPORTED_METHODS)}, all"
+                )
+    if not methods and default:
+        return [default]
+    return methods
+
+
+def resolve_comprehensive_output_path(base_path: Path, method: str, multi: bool) -> Path:
+    if not multi:
+        return base_path
+    text = str(base_path)
+    if "{method}" in text or "{METHOD}" in text:
+        return Path(text.replace("{method}", method.lower()).replace("{METHOD}", method.upper()))
+    if base_path.suffix:
+        return base_path.with_name(f"{base_path.stem}-{method.upper()}{base_path.suffix}")
+    return base_path.with_name(f"{base_path.name}-{method.upper()}")
+
+
 def write_csv(rows: list[dict[str, object]], output: TextIO) -> None:
     columns = (
         "date",
@@ -402,6 +445,66 @@ def write_csv(rows: list[dict[str, object]], output: TextIO) -> None:
             for key in ("k_decimal", "k_x_decimal", "k_y_decimal"):
                 formatted[key] = format_number(row[key], 1)
         writer.writerow({renames.get(key,key):value for key,value in formatted.items()})
+
+
+def write_multi_method_csv(
+    rows_by_method: dict[str, list[dict[str, object]]],
+    output: TextIO,
+) -> None:
+    methods = list(rows_by_method.keys())
+    if not methods:
+        return
+    first_rows = rows_by_method[methods[0]]
+    fieldnames: list[str] = ["date", "interval_utc", "stored_k_raw", "stored_k"]
+    for method in methods:
+        fieldnames.append(f"{method}_k")
+    for method in methods:
+        is_hd = method == "usgs" or (
+            bool(rows_by_method[method]) and rows_by_method[method][0].get("components") == "HD"
+        )
+        c1, c2 = ("h", "d") if is_hd else ("x", "y")
+        r1, r2 = ("h_amplitude_nT", "d_amplitude_nT") if is_hd else ("x_range_nT", "y_range_nT")
+        fieldnames.extend(
+            (
+                f"{method}_k_{c1}",
+                f"{method}_k_{c2}",
+                f"{method}_{r1}",
+                f"{method}_{r2}",
+                f"{method}_matches_stored",
+            )
+        )
+
+    indexed: dict[str, dict[tuple[str, str], dict[str, object]]] = {
+        method: {(str(r["date"]), str(r["interval_utc"])): r for r in method_rows}
+        for method, method_rows in rows_by_method.items()
+    }
+    writer = csv.DictWriter(output, fieldnames=fieldnames)
+    writer.writeheader()
+
+    for base_row in first_rows:
+        key = (str(base_row["date"]), str(base_row["interval_utc"]))
+        combined: dict[str, object] = {
+            "date": base_row["date"],
+            "interval_utc": base_row["interval_utc"],
+            "stored_k_raw": base_row.get("stored_k_raw"),
+            "stored_k": (
+                format_number(base_row["stored_k"], 1)
+                if base_row.get("stored_k") is not None
+                else ""
+            ),
+        }
+        for method in methods:
+            row = indexed[method].get(key, {})
+            is_hd = method == "usgs" or row.get("components") == "HD"
+            c1, c2 = ("h", "d") if is_hd else ("x", "y")
+            r1, r2 = ("h_amplitude_nT", "d_amplitude_nT") if is_hd else ("x_range_nT", "y_range_nT")
+            combined[f"{method}_k"] = row.get("k")
+            combined[f"{method}_k_{c1}"] = row.get("k_x")
+            combined[f"{method}_k_{c2}"] = row.get("k_y")
+            combined[f"{method}_{r1}"] = format_number(row.get("x_range_nT"))
+            combined[f"{method}_{r2}"] = format_number(row.get("y_range_nT"))
+            combined[f"{method}_matches_stored"] = row.get("matches_stored", "")
+        writer.writerow(combined)
 
 
 def write_comprehensive(rows: list[dict[str, object]], output: TextIO) -> None:
@@ -449,8 +552,16 @@ def main() -> int:
         default="iaf",
         help="input format (default: iaf)",
     )
-    parser.add_argument("--method", choices=("ih", "fmi", "kasm", "hermanus", "usgs"), default="ih",
-                        help="K-index method (default: ih); all methods use standard-library Python")
+    parser.add_argument(
+        "--method",
+        nargs="+",
+        action="extend",
+        metavar="METHOD",
+        help=(
+            "one or more K-index methods (ih, fmi, kasm, hermanus, usgs, or all; "
+            "space- or comma-separated; default: ih)"
+        ),
+    )
     parser.add_argument("--usgs-parameters", type=Path, help="USGS H/D calibration JSON (default: bootstrap monthly)")
     parser.add_argument("--usgs-parameters-output", type=Path, help="save USGS calibration JSON for a single input month")
     parser.add_argument("--usgs-mean-minutes", type=int, default=60, help="USGS minutes per selected mean (default: 60)")
@@ -487,7 +598,7 @@ def main() -> int:
     parser.add_argument(
         "--comprehensive-output",
         type=Path,
-        help="also write daily K values in IRF comprehensive.txt format",
+        help="also write daily K values in IRF comprehensive.txt format (separate file per method when multiple methods are chosen)",
     )
     parser.add_argument(
         "--minimum-coverage",
@@ -502,7 +613,27 @@ def main() -> int:
     )
     args = parser.parse_args()
 
-    if args.method != "usgs" and (args.usgs_parameters or args.usgs_parameters_output or args.usgs_h_reference is not None or args.usgs_mean_minutes != 60):
+    # If --method was placed immediately before the positional input_file, recover input_file.
+    if (
+        args.method
+        and len(args.method) > 1
+        and args.input_file == Path("KIR/KIR23DEC.BIN")
+        and not all(
+            t.lower() in SUPPORTED_METHODS + ("all",)
+            for t in args.method[-1].replace(",", " ").split()
+        )
+        and (Path(args.method[-1]).exists() or "/" in args.method[-1] or "." in args.method[-1])
+    ):
+        args.input_file = Path(args.method.pop())
+
+    try:
+        methods = parse_methods(args.method, default="ih")
+    except ValueError as error:
+        parser.error(str(error))
+
+    multi_method = len(methods) > 1
+
+    if "usgs" not in methods and (args.usgs_parameters or args.usgs_parameters_output or args.usgs_h_reference is not None or args.usgs_mean_minutes != 60):
         parser.error("--usgs-* options require --method usgs")
     if args.usgs_parameters and (args.usgs_h_reference is not None or args.usgs_mean_minutes != 60):
         parser.error("USGS calibration-file settings cannot be combined with mean/H overrides")
@@ -512,11 +643,11 @@ def main() -> int:
         ("mu", args.hermanus_mu), ("qindex", args.hermanus_q_index),
         ("qstart", args.hermanus_q_start), ("qend", args.hermanus_q_end),
         ("qfactor", args.hermanus_q_factor), ("seed", args.hermanus_seed)) if value is not None}
-    if args.method != "hermanus" and hermanus_options:
+    if "hermanus" not in methods and hermanus_options:
         parser.error("--hermanus-* options require --method hermanus")
-    if args.method != "kasm" and args.kasm_smoothing != 1.0:
+    if "kasm" not in methods and args.kasm_smoothing != 1.0:
         parser.error("--kasm-smoothing applies to --method kasm")
-    if args.method not in ("kasm", "hermanus", "usgs") and args.iaga_sample_step != 1:
+    if not any(m in ("kasm", "hermanus", "usgs") for m in methods) and args.iaga_sample_step != 1:
         parser.error("--iaga-sample-step applies to KASM/Hermanus/USGS")
     if not 0 < args.minimum_coverage <= 1:
         parser.error("--minimum-coverage must be greater than 0 and at most 1")
@@ -527,151 +658,193 @@ def main() -> int:
     if args.sq_input and args.sq_file:
         parser.error("use either --sq-input or the positional SQ file, not both")
     if (
-        args.method == "ih"
+        "ih" in methods
         and args.input_format == "iaga"
         and not args.sq_input
         and not args.sq_file
         and not args.bootstrap_file
     ):
         parser.error("IAGA input requires --sq-input or an IAF --bootstrap-file")
-    if args.output and args.comprehensive_output and args.output.resolve() == args.comprehensive_output.resolve():
+
+    comp_paths = (
+        {m: resolve_comprehensive_output_path(args.comprehensive_output, m, multi_method) for m in methods}
+        if args.comprehensive_output
+        else {}
+    )
+    if args.output and any(args.output.resolve() == p.resolve() for p in comp_paths.values()):
         parser.error("CSV and comprehensive outputs must use different paths")
     if args.sq_output and any(
         path and args.sq_output.resolve() == path.resolve()
-        for path in (args.output, args.comprehensive_output)
+        for path in (args.output, *comp_paths.values())
     ):
         parser.error("SQ output must use a different path from K-index outputs")
 
-    if args.method in ("fmi", "kasm", "hermanus", "usgs"):
+    if "ih" not in methods and (args.sq_input or args.sq_file or args.sq_output or args.bootstrap_file):
+        label = "/".join(m.upper() for m in methods)
+        parser.error(f"{label} fits its own daily quiet curve; SQ input/output and bootstrap files apply to IH")
+    if "fmi" not in methods and args.longitude is not None:
+        label = "/".join(m.upper() for m in methods)
+        if methods == ["ih"]:
+            parser.error("--context-file applies to FMI/KASM; --longitude applies to FMI")
+        parser.error(f"--longitude applies to FMI; {label} uses no longitude parameter")
+    if args.context_file and not any(m in ("fmi", "kasm", "usgs") for m in methods):
+        if "hermanus" in methods:
+            parser.error("Hermanus uses one day; --context-file applies to FMI/KASM")
+        parser.error("--context-file applies to FMI/KASM; --longitude applies to FMI")
+    if "fmi" in methods and args.input_format == "iaga" and args.longitude is None:
+        parser.error("--longitude is required for FMI with IAGA input")
+
+    if any(m in ("fmi", "kasm", "hermanus", "usgs") for m in methods):
         inputs = [args.input_file.resolve(), *(p.resolve() for p in args.context_file)]
         if args.usgs_parameters:
             inputs.append(args.usgs_parameters.resolve())
-        if any(p and p.resolve() in inputs for p in (args.output, args.comprehensive_output)):
+        if any(p and p.resolve() in inputs for p in (args.output, *comp_paths.values())):
             parser.error("outputs must not overwrite input or context files")
+
+    rows_by_method: dict[str, list[dict[str, object]]] = {}
+    descriptions: list[str] = []
+    processed_days = 0
+    usgs_params = None
+    sq: dict[str, tuple[float, ...]] | None = None
+
     try:
-        if args.method in ("fmi", "kasm", "hermanus", "usgs"):
-            if args.method == "fmi":
-                import calculate_fmi_k_index as backend
-            elif args.method == "kasm":
-                import calculate_kasm_k_index as backend
-            elif args.method == "hermanus":
-                import calculate_hermanus_k_index as backend
-            else:
-                import calculate_usgs_k_index as backend
-            label = args.method.upper()
-            if args.sq_input or args.sq_file or args.sq_output or args.bootstrap_file:
-                parser.error(f"{label} fits its own daily quiet curve; SQ input/output and bootstrap files apply to IH")
-            if args.method in ("kasm", "hermanus", "usgs") and args.longitude is not None:
-                parser.error(f"--longitude applies to FMI; {label} uses no longitude parameter")
-            if args.method == "hermanus" and args.context_file:
-                parser.error("Hermanus uses one day; --context-file applies to FMI/KASM")
-            if args.method == "fmi" and args.input_format == "iaga" and args.longitude is None:
-                parser.error("--longitude is required for FMI with IAGA input")
-            def load_days(path):
-                if args.input_format == "iaf":
-                    return backend.iaf_days(parse_month_file(path))
-                if args.method in ("kasm", "hermanus", "usgs"):
-                    return backend.iaga_days(path, sample_step=args.iaga_sample_step)
-                return backend.iaga_days(path)
-            days = load_days(args.input_file)
-            targets = list(days)
-            for context_path in args.context_file:
-                context = load_days(context_path)
-                if args.input_format == "iaf":
-                    identity = next(iter(days.values()))[2]
-                    if any((data[2][0], data[2][2], data[2][3]) !=
-                           (identity[0], identity[2], identity[3]) for data in context.values()):
-                        raise ValueError(f"{label} context must belong to the same station and coordinates")
-                for day, data in context.items():
-                    if day in days and days[day] != data:
-                        raise ValueError(f"conflicting {label} context for {day}")
-                    days[day] = data
-            usgs_params = None
-            if args.method == "usgs":
-                if args.usgs_parameters:
-                    usgs_params = backend.read_parameters(args.usgs_parameters)
-                if args.usgs_parameters_output:
-                    if len({(d.year,d.month) for d in targets}) != 1:
-                        parser.error("USGS calibration output requires one input calendar month")
-                    if usgs_params is None:
-                        usgs_params = backend.bootstrap_parameters(days, targets, nppm=args.usgs_mean_minutes,
-                            h_reference=args.usgs_h_reference, k9_nT=args.k9_limit)
-                    protected = [args.input_file, *args.context_file, args.output, args.comprehensive_output, args.usgs_parameters]
-                    if any(p and args.usgs_parameters_output.resolve() == p.resolve() for p in protected):
-                        parser.error("USGS calibration output must use a separate path")
-            options = (dict(step=60 if args.input_format == "iaf" else 1, longitude=args.longitude)
-                       if args.method == "fmi" else dict(smoothing=args.kasm_smoothing)
-                       if args.method == "kasm" else hermanus_options if args.method == "hermanus"
-                       else dict(parameters=usgs_params,nppm=args.usgs_mean_minutes,h_reference=args.usgs_h_reference))
-            rows = backend.calculate_days(days, targets, k9_nT=args.k9_limit,
-                minimum_coverage=args.minimum_coverage, **options)
-            processed_days = len(targets)
-            from datetime import timedelta
-            missing_context = sum(any(day + timedelta(days=n) not in days for n in (-1, 1))
-                                  for day in targets)
-            context_status = ("unavailable due to missing adjacent-day context"
-                              if args.method == "fmi" else "calculated with reduced adjacent-day context")
-            bootstrap_description = f"{label} method; {missing_context} day(s) {context_status}"
-            if args.method == "usgs":
-                bootstrap_description = ("USGS H/D; calibration " + (str(args.usgs_parameters) if args.usgs_parameters else "bootstrapped monthly")
-                    + f"; {missing_context} day(s) with reduced adjacent-day context")
-            if args.method == "hermanus":
-                bootstrap_description = ("Hermanus LRNS; single-day fit; settings: "
-                    f"mu={hermanus_options.get('mu', .17)}, q-index={hermanus_options.get('qindex', 'M')}, "
-                    f"q-start={hermanus_options.get('qstart', 300)}, q-end={hermanus_options.get('qend', 1009)}, "
-                    f"q-factor={hermanus_options.get('qfactor', '0.01*K9')}, seed={hermanus_options.get('seed', 1)}")
-        else:
-            if args.context_file or args.longitude is not None:
-                parser.error("--context-file applies to FMI/KASM; --longitude applies to FMI")
-            records = parse_month_file(args.input_file) if args.input_format == "iaf" else None
-            sq_input = args.sq_input or args.sq_file
-            bootstrap_path: Path | None = None
-            if sq_input:
-                sq = read_sq_curve(sq_input)
-                bootstrap_description = f"SQ file {sq_input}"
-            else:
-                bootstrap_path = args.bootstrap_file or args.input_file
-                if records is not None and bootstrap_path.resolve() == args.input_file.resolve():
-                    bootstrap_records = records
+        iaf_records = parse_month_file(args.input_file) if args.input_format == "iaf" else None
+        for method in methods:
+            if method in ("fmi", "kasm", "hermanus", "usgs"):
+                if method == "fmi":
+                    import calculate_fmi_k_index as backend
+                elif method == "kasm":
+                    import calculate_kasm_k_index as backend
+                elif method == "hermanus":
+                    import calculate_hermanus_k_index as backend
                 else:
-                    bootstrap_records = parse_month_file(bootstrap_path)
-                sq, quiet_days = bootstrap_sq_curve(
-                    bootstrap_records, args.bootstrap_days, estimator=args.sq_estimator
+                    import calculate_usgs_k_index as backend
+                label = method.upper()
+
+                def load_days(path: Path):
+                    if args.input_format == "iaf":
+                        recs = iaf_records if path.resolve() == args.input_file.resolve() and iaf_records is not None else parse_month_file(path)
+                        return backend.iaf_days(recs)
+                    if method in ("kasm", "hermanus", "usgs"):
+                        return backend.iaga_days(path, sample_step=args.iaga_sample_step)
+                    return backend.iaga_days(path)
+
+                days = load_days(args.input_file)
+                targets = list(days)
+                if method in ("fmi", "kasm", "usgs"):
+                    for context_path in args.context_file:
+                        context = load_days(context_path)
+                        if args.input_format == "iaf":
+                            identity = next(iter(days.values()))[2]
+                            if any((data[2][0], data[2][2], data[2][3]) !=
+                                   (identity[0], identity[2], identity[3]) for data in context.values()):
+                                raise ValueError(f"{label} context must belong to the same station and coordinates")
+                        for day, data in context.items():
+                            if day in days and days[day] != data:
+                                raise ValueError(f"conflicting {label} context for {day}")
+                            days[day] = data
+                if method == "usgs":
+                    if args.usgs_parameters:
+                        usgs_params = backend.read_parameters(args.usgs_parameters)
+                    if args.usgs_parameters_output:
+                        if len({(d.year, d.month) for d in targets}) != 1:
+                            parser.error("USGS calibration output requires one input calendar month")
+                        if usgs_params is None:
+                            usgs_params = backend.bootstrap_parameters(
+                                days, targets, nppm=args.usgs_mean_minutes,
+                                h_reference=args.usgs_h_reference, k9_nT=args.k9_limit
+                            )
+                        protected = [args.input_file, *args.context_file, args.output, *comp_paths.values(), args.usgs_parameters]
+                        if any(p and args.usgs_parameters_output.resolve() == p.resolve() for p in protected):
+                            parser.error("USGS calibration output must use a separate path")
+                options = (
+                    dict(step=60 if args.input_format == "iaf" else 1, longitude=args.longitude)
+                    if method == "fmi"
+                    else dict(smoothing=args.kasm_smoothing)
+                    if method == "kasm"
+                    else hermanus_options
+                    if method == "hermanus"
+                    else dict(parameters=usgs_params, nppm=args.usgs_mean_minutes, h_reference=args.usgs_h_reference)
                 )
-                bootstrap_description = (
-                    f"bootstrapped SQ ({args.sq_estimator}) from {bootstrap_path} using {len(quiet_days)} quiet days: "
-                    f"{', '.join(quiet_days)}"
+                method_rows = backend.calculate_days(
+                    days, targets, k9_nT=args.k9_limit, minimum_coverage=args.minimum_coverage, **options
                 )
-            if args.sq_output and args.sq_output.resolve() == args.input_file.resolve():
-                parser.error("SQ output must not overwrite the input file")
-            if args.sq_output and bootstrap_path and args.sq_output.resolve() == bootstrap_path.resolve():
-                parser.error("SQ output must not overwrite the IAF bootstrap file")
-            if args.input_format == "iaga":
-                rows = []
-                processed_days = 0
-                for day, samples in iter_iaga_days(args.input_file):
-                    rows.extend(
-                        calculate_iaga_day(
-                            day, samples, sq, args.minimum_coverage, args.k9_limit
-                        )
+                processed_days = len(targets)
+                from datetime import timedelta
+                missing_context = sum(any(day + timedelta(days=n) not in days for n in (-1, 1)) for day in targets)
+                context_status = (
+                    "unavailable due to missing adjacent-day context"
+                    if method == "fmi"
+                    else "calculated with reduced adjacent-day context"
+                )
+                bootstrap_description = f"{label} method; {missing_context} day(s) {context_status}"
+                if method == "usgs":
+                    bootstrap_description = (
+                        "USGS H/D; calibration "
+                        + (str(args.usgs_parameters) if args.usgs_parameters else "bootstrapped monthly")
+                        + f"; {missing_context} day(s) with reduced adjacent-day context"
                     )
-                    processed_days += 1
+                if method == "hermanus":
+                    bootstrap_description = (
+                        "Hermanus LRNS; single-day fit; settings: "
+                        f"mu={hermanus_options.get('mu', .17)}, q-index={hermanus_options.get('qindex', 'M')}, "
+                        f"q-start={hermanus_options.get('qstart', 300)}, q-end={hermanus_options.get('qend', 1009)}, "
+                        f"q-factor={hermanus_options.get('qfactor', '0.01*K9')}, seed={hermanus_options.get('seed', 1)}"
+                    )
+                rows_by_method[method] = method_rows
+                descriptions.append(bootstrap_description)
             else:
-                rows = [
-                    row
-                    for record in records
-                    for row in calculate_day(
-                        record, sq, args.minimum_coverage, k9_override_nT=args.k9_limit
+                records = iaf_records
+                sq_input = args.sq_input or args.sq_file
+                bootstrap_path: Path | None = None
+                if sq_input:
+                    sq = read_sq_curve(sq_input)
+                    bootstrap_description = f"SQ file {sq_input}"
+                else:
+                    bootstrap_path = args.bootstrap_file or args.input_file
+                    if records is not None and bootstrap_path.resolve() == args.input_file.resolve():
+                        bootstrap_records = records
+                    else:
+                        bootstrap_records = parse_month_file(bootstrap_path)
+                    sq, quiet_days = bootstrap_sq_curve(
+                        bootstrap_records, args.bootstrap_days, estimator=args.sq_estimator
                     )
-                ]
-                processed_days = len(records)
+                    bootstrap_description = (
+                        f"bootstrapped SQ ({args.sq_estimator}) from {bootstrap_path} using {len(quiet_days)} quiet days: "
+                        f"{', '.join(quiet_days)}"
+                    )
+                if args.sq_output and args.sq_output.resolve() == args.input_file.resolve():
+                    parser.error("SQ output must not overwrite the input file")
+                if args.sq_output and bootstrap_path and args.sq_output.resolve() == bootstrap_path.resolve():
+                    parser.error("SQ output must not overwrite the IAF bootstrap file")
+                if args.input_format == "iaga":
+                    method_rows = []
+                    processed_days = 0
+                    for day, samples in iter_iaga_days(args.input_file):
+                        method_rows.extend(
+                            calculate_iaga_day(
+                                day, samples, sq, args.minimum_coverage, args.k9_limit
+                            )
+                        )
+                        processed_days += 1
+                else:
+                    method_rows = [
+                        row
+                        for record in records
+                        for row in calculate_day(
+                            record, sq, args.minimum_coverage, k9_override_nT=args.k9_limit
+                        )
+                    ]
+                    processed_days = len(records)
+                rows_by_method[method] = method_rows
+                descriptions.append(bootstrap_description)
     except (OSError, ValueError, struct.error) as error:
         parser.error(str(error))
 
-    if args.usgs_parameters_output:
+    if args.usgs_parameters_output and usgs_params is not None:
         import json
-        args.usgs_parameters_output.write_text(json.dumps(usgs_params, indent=2)+"\n")
-    if args.sq_output:
+        args.usgs_parameters_output.write_text(json.dumps(usgs_params, indent=2) + "\n")
+    if args.sq_output and sq is not None:
         write_sq_curve(sq, args.sq_output)
 
     output: TextIO
@@ -680,29 +853,35 @@ def main() -> int:
     else:
         output = sys.stdout
     try:
-        write_csv(rows, output)
+        if multi_method:
+            write_multi_method_csv(rows_by_method, output)
+        else:
+            write_csv(rows_by_method[methods[0]], output)
     finally:
         if args.output:
             output.close()
 
-    if args.comprehensive_output:
-        with args.comprehensive_output.open("w", encoding="ascii", newline="\n") as comprehensive:
-            write_comprehensive(rows, comprehensive)
+    for method, comp_path in comp_paths.items():
+        with comp_path.open("w", encoding="ascii", newline="\n") as comprehensive:
+            write_comprehensive(rows_by_method[method], comprehensive)
 
-    if args.input_format == "iaf":
-        comparisons = [row for row in rows if row["matches_stored"] != ""]
-        matches = sum(row["matches_stored"] == 1 for row in comparisons)
-        print(
-            f"Processed {processed_days} days and {len(rows)} three-hour intervals; "
-            f"{matches}/{len(comparisons)} calculated combined K values match the stored values.",
-            file=sys.stderr,
-        )
-    else:
-        print(
-            f"Processed {processed_days} days and {len(rows)} three-hour intervals from IAGA data.",
-            file=sys.stderr,
-        )
-    print(bootstrap_description, file=sys.stderr)
+    for method, bootstrap_description in zip(methods, descriptions):
+        rows = rows_by_method[method]
+        prefix = f"[{method.upper()}] " if multi_method else ""
+        if args.input_format == "iaf":
+            comparisons = [row for row in rows if row["matches_stored"] != ""]
+            matches = sum(row["matches_stored"] == 1 for row in comparisons)
+            print(
+                f"{prefix}Processed {processed_days} days and {len(rows)} three-hour intervals; "
+                f"{matches}/{len(comparisons)} calculated combined K values match the stored values.",
+                file=sys.stderr,
+            )
+        else:
+            print(
+                f"{prefix}Processed {processed_days} days and {len(rows)} three-hour intervals from IAGA data.",
+                file=sys.stderr,
+            )
+        print(f"{prefix}{bootstrap_description}", file=sys.stderr)
     if args.k9_limit is not None:
         print(f"K9 range override: {args.k9_limit:g} nT", file=sys.stderr)
     return 0

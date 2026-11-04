@@ -94,6 +94,71 @@ class TestRegressionAndPipeline(unittest.TestCase):
             self.assertTrue(summaries[0].comprehensive_output.is_file())
             self.assertTrue((out_dir / "BEL" / "202311BELsq").is_file())
 
+    def test_multi_method_cli_and_pipeline(self) -> None:
+        import csv
+        import subprocess
+        import sys
+
+        with tempfile.TemporaryDirectory() as tmp:
+            tmp_dir = Path(tmp)
+            summary_csv = tmp_dir / "KIR23DEC-summary.csv"
+            comp_base = tmp_dir / "KIR23DEC-comprehensive.txt"
+
+            result = subprocess.run(
+                [
+                    sys.executable,
+                    str(REPO_ROOT / "calculate_k_index.py"),
+                    str(REPO_ROOT / "KIR" / "KIR23DEC.BIN"),
+                    "--method",
+                    "ih",
+                    "fmi",
+                    "usgs",
+                    "--context-file",
+                    str(REPO_ROOT / "KIR" / "KIR23NOV.BIN"),
+                    "--sq-input",
+                    str(REPO_ROOT / "KIR" / "202311KIRsq"),
+                    "-o",
+                    str(summary_csv),
+                    "--comprehensive-output",
+                    str(comp_base),
+                ],
+                capture_output=True,
+                text=True,
+            )
+            self.assertEqual(result.returncode, 0, result.stderr)
+            self.assertTrue(summary_csv.is_file())
+            self.assertTrue((tmp_dir / "KIR23DEC-comprehensive-IH.txt").is_file())
+            self.assertTrue((tmp_dir / "KIR23DEC-comprehensive-FMI.txt").is_file())
+            self.assertTrue((tmp_dir / "KIR23DEC-comprehensive-USGS.txt").is_file())
+
+            with summary_csv.open(encoding="utf-8") as handle:
+                rows = list(csv.DictReader(handle))
+            self.assertEqual(len(rows), 31 * 8)
+            for col in (
+                "ih_k",
+                "fmi_k",
+                "usgs_k",
+                "ih_x_range_nT",
+                "fmi_x_range_nT",
+                "usgs_h_amplitude_nT",
+            ):
+                self.assertIn(col, rows[0])
+
+            defaults, stations_cfg = pipeline.load_config(REPO_ROOT / "stations.json")
+            pipe_out = tmp_dir / "pipeline"
+            summaries = pipeline.run_station_pipeline(
+                station="KIR",
+                station_cfg=stations_cfg["KIR"],
+                defaults=defaults,
+                base_dir=REPO_ROOT,
+                output_dir=pipe_out,
+                method_override=["ih", "fmi"],
+            )
+            self.assertEqual(len(summaries), 8)  # 4 months * 2 methods
+            self.assertTrue((pipe_out / "KIR" / "KIR23DEC-k-index-summary.csv").is_file())
+            self.assertTrue((pipe_out / "KIR" / "KIR23DEC-comprehensive-IH.txt").is_file())
+            self.assertTrue((pipe_out / "KIR" / "KIR23DEC-comprehensive-FMI.txt").is_file())
+
 
 if __name__ == "__main__":
     unittest.main()
