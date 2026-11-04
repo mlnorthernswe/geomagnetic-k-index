@@ -159,6 +159,16 @@ class FMI:
                     start, end = middle-wing, middle+wing+1
                     means.append(_MISSING if gaps[end] != gaps[start]
                                  else int((sums[end]-sums[start]) / (end-start)))
+                if all(m == _MISSING for m in means) and any(v != _MISSING for v in values[n:2*n]):
+                    avail_start = 0 if any(v != _MISSING for v in values[:n]) else n
+                    avail_end = 3 * n if any(v != _MISSING for v in values[2*n:]) else 2 * n
+                    means = []
+                    for hour, length in enumerate(fit_lengths):
+                        middle, wing = n + (3600*hour+1800)//step, length//step
+                        start = max(avail_start, middle - wing)
+                        end = min(avail_end, middle + wing + 1)
+                        means.append(_MISSING if end <= start or gaps[end] != gaps[start]
+                                     else int((sums[end]-sums[start]) / (end-start)))
                 _interpolate_means(means)
                 harmonic = _fit_curve(means, step)
                 residuals.append([a-b if a != _MISSING and b != _MISSING else _MISSING
@@ -201,15 +211,18 @@ def iaga_days(path):
 
 def calculate_days(days, target_days=None, *, step=60, k9_nT=None,
                    longitude=None, minimum_coverage=0.9):
-    """Return existing CSV-schema rows. Missing adjacent days invalidate a day.
+    """Return existing CSV-schema rows, using MissingPoint padding for absent neighbor days.
 
-    Never invent context by repeating or extrapolating boundary days. Coverage
-    reports observed samples before FMI's short-gap interpolation.
+    Never invent context by repeating or extrapolating boundary days; missing
+    neighbor days are passed as explicit missing samples so FMI's hourly mean
+    extrapolation handles boundary hours. Coverage reports observed samples
+    before FMI's short-gap interpolation.
     """
     if not 0 < minimum_coverage <= 1:
         raise ValueError("minimum coverage must be greater than 0 and at most 1")
     rows = []
     count = 86400 // step
+    missing_day = [None] * count
     with FMI() as backend:
         for day in sorted(days if target_days is None else target_days):
             x, y, record, header_longitude = days[day]
@@ -220,19 +233,18 @@ def calculate_days(days, target_days=None, *, step=60, k9_nT=None,
             if not math.isfinite(limit) or limit < 10 or not math.isfinite(lon) or not -180 <= lon <= 360:
                 raise ValueError("FMI requires K9 >= 10 nT and longitude in [-180, 360]")
             neighbors = [day + timedelta(days=offset) for offset in (-1, 0, 1)]
-            has_context = all(d in days for d in neighbors)
-            if has_context:
-                result = backend.calculate(
-                    [v for d in neighbors for v in days[d][0]],
-                    [v for d in neighbors for v in days[d][1]], step, limit, lon,
-                )
-                ks, kx, ky, rx, ry = result
+            result = backend.calculate(
+                [v for d in neighbors for v in (days[d][0] if d in days else missing_day)],
+                [v for d in neighbors for v in (days[d][1] if d in days else missing_day)],
+                step, limit, lon,
+            )
+            ks, kx, ky, rx, ry = result
             for i, (start, end) in enumerate(ih.INTERVALS):
                 a, b = i * count // 8, (i + 1) * count // 8
                 cx = sum(v is not None for v in x[a:b]) / (b - a)
                 cy = sum(v is not None for v in y[a:b]) / (b - a)
-                ix = kx[i] if has_context and kx[i] >= 0 and cx >= minimum_coverage else None
-                iy = ky[i] if has_context and ky[i] >= 0 and cy >= minimum_coverage else None
+                ix = kx[i] if kx[i] >= 0 and cx >= minimum_coverage else None
+                iy = ky[i] if ky[i] >= 0 and cy >= minimum_coverage else None
                 # Match the existing application's requirement for both components.
                 k = max(ix, iy) if ix is not None and iy is not None else None
                 stored_raw = record[ih.K_START_WORD + i] if record else None

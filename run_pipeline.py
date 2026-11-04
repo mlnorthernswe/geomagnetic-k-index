@@ -199,7 +199,7 @@ def _compute_adaptive_station_months(
         month_rows = [row for day in targets for row in by_date[day.isoformat()]]
         missing = sum(any(day + timedelta(days=n) not in days for n in (-1, 1)) for day in targets)
         sq_source = (
-            f"FMI daily fit ({missing}d no context)"
+            f"FMI daily fit ({missing}d reduced context)"
             if method == "fmi"
             else f"KASM fit ({missing}d reduced context)"
             if method == "kasm"

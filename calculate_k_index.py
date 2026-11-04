@@ -772,11 +772,7 @@ def main() -> int:
                 processed_days = len(targets)
                 from datetime import timedelta
                 missing_context = sum(any(day + timedelta(days=n) not in days for n in (-1, 1)) for day in targets)
-                context_status = (
-                    "unavailable due to missing adjacent-day context"
-                    if method == "fmi"
-                    else "calculated with reduced adjacent-day context"
-                )
+                context_status = "calculated with reduced adjacent-day context"
                 bootstrap_description = f"{label} method; {missing_context} day(s) {context_status}"
                 if method == "usgs":
                     bootstrap_description = (

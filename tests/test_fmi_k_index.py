@@ -43,10 +43,12 @@ class TestFMI(unittest.TestCase):
         day = date(2023, 1, 2)
         def data():
             return ([100000] * 1440, [20000] * 1440, None, 20)
+        # Single isolated day without previous/next day is still calculated
+        single_rows = fmi.calculate_days({day: data()}, k9_nT=1500)
+        self.assertTrue(all(r["k"] == 0 for r in single_rows))
         days = {day + timedelta(days=n): data() for n in (-1, 0, 1)}
         rows = fmi.calculate_days(days, k9_nT=1500)
-        self.assertTrue(all(r["k"] is None for r in rows[:8] + rows[-8:]))
-        self.assertTrue(all(r["k"] == 0 for r in rows[8:16]))
+        self.assertTrue(all(r["k"] == 0 for r in rows))
         days[day][0][100:120] = [None] * 20
         rows = fmi.calculate_days(days, [day], k9_nT=1500)
         self.assertIsNone(rows[0]["k"])
@@ -63,18 +65,18 @@ class TestFMI(unittest.TestCase):
                 "--context-file", str(ROOT / "KIR/KIR23NOV.BIN"), "-o", str(output),
             ], capture_output=True, text=True)
             self.assertEqual(result.returncode, 0, result.stderr)
-            self.assertIn("1 day(s) unavailable", result.stderr)
+            self.assertIn("1 day(s) calculated with reduced adjacent-day context", result.stderr)
             with output.open() as source:
                 rows = list(csv.DictReader(source))
             self.assertEqual(len(rows), 31 * 8)
             self.assertTrue(all(r["k"] != "" for r in rows[:8]))
-            self.assertTrue(all(r["k"] == "" for r in rows[-8:]))
+            self.assertTrue(all(r["k"] != "" for r in rows[-8:]))
             summaries = pipeline.run_station_pipeline("KIR", {"directory": "KIR"}, {},
                 ROOT, output_dir=Path(tmp), method_override="fmi", dry_run=True)
             self.assertTrue(all(s.csv_output.name.endswith("-FMI.csv") for s in summaries))
             self.assertTrue(all(s.sq_output is None for s in summaries))
             december = next(s for s in summaries if s.yyyymm == "202312")
-            self.assertEqual(december.comparable_intervals, 30 * 8)
+            self.assertEqual(december.comparable_intervals, 31 * 8)
 
     def test_iaga_second_resolution(self):
         with tempfile.TemporaryDirectory() as tmp:
