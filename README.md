@@ -59,14 +59,15 @@ implemented in standard-library Python, ported from the attributed
 single-precision harmonic arithmetic, and the original threshold comparisons.
 No compilation or downloads occur at runtime.
 
-For each target day, FMI needs the previous and following calendar days.
-The calculator accepts repeatable `--context-file` arguments in the same input
-format, from the same station; only dates in the main input file are output.
-The pipeline automatically uses available neighboring months, including across
-year boundaries. Days lacking either neighboring day have unavailable K values
-(blank CSV cells and `-` in comprehensive output), and the run summary reports
-these days. In the December example above, December 31 remains unavailable
-unless January 1 is also supplied as context. Date gaps are never bridged.
+For each target day, FMI uses the previous and following calendar days when
+available. The calculator accepts repeatable `--context-file` arguments in the
+same input format, from the same station; only dates in the main input file are
+output. The pipeline automatically uses available neighboring months, including
+across year boundaries. When either neighboring day is absent, FMI passes
+missing-value markers for the absent neighbor so `InterpolateMean` extrapolates
+the boundary hourly means from the target day's interior hourly means and still
+calculates K values (reporting how many days were calculated with reduced
+adjacent-day context). Date gaps are never bridged.
 
 IAF input uses minute samples and obtains longitude and K9 from the header;
 `--longitude` (degrees east) and `--k9-limit` override these values. For
@@ -316,16 +317,29 @@ python3 run_pipeline.py --method all --output-dir /tmp/all-methods
 Run `python3 calculate_k_index.py --help` for all options.
 
 - `--method METHOD [METHOD ...]`: select one or more calculation methods (`ih`, `fmi`, `kasm`, `hermanus`, `usgs`, or `all`; default: `ih`). When multiple methods are chosen, `-o` writes a single combined summary CSV and `--comprehensive-output` writes a separate `-<METHOD>` file for each chosen method.
-- `--sq-input PATH`: use an existing 24-row SQ file.
-- `--sq-output PATH`: save the SQ curve used by this run in the same 24-row format.
-- `--bootstrap-file PATH`: use another IAF month file to construct the SQ curve; defaults to the month being processed.
 - `--input-format {iaf,iaga}`: select IAF binary input (default) or timestamped IAGA-2002 ASCII input.
-- `--bootstrap-days N`: number of quietest valid days to use for bootstrap (default: 10).
-- `--sq-estimator {median,mean}`: hourly estimator used when bootstrapping an SQ curve; `median` is recommended for high-latitude stations due to the risk of outliers even on quiet days (default: `median`).
 - `--k9-limit NT`: override the station K9 range; by default it is read from the IAF header.
 - `--minimum-coverage FRACTION`: minimum valid sample coverage for each component and interval (default: 0.9).
 - `-o PATH`, `--output PATH`: write detailed per-interval results as CSV (default: standard output).
 - `--comprehensive-output PATH`: also write daily K values in the IRF `comprehensive.txt` layout.
+- `--sq-input PATH` *(IH only)*: use an existing 24-row SQ file.
+- `--sq-output PATH` *(IH only)*: save the SQ curve used by this run in the same 24-row format.
+- `--bootstrap-file PATH` *(IH only)*: use another IAF month file to construct the SQ curve; defaults to the month being processed.
+- `--bootstrap-days N` *(IH only)*: number of quietest valid days to use for bootstrap (default: 10).
+- `--sq-estimator {median,mean}` *(IH only)*: hourly estimator used when bootstrapping an SQ curve; `median` is recommended for high-latitude stations due to the risk of outliers even on quiet days (default: `median`).
+- `--longitude DEGREES` *(FMI only)*: observatory longitude in degrees east; defaults to the IAF header value.
+- `--kasm-smoothing FACTOR` *(KASM only)*: smoothing factor (finite and positive; default: 1).
+- `--hermanus-mu FLOAT` *(Hermanus only)*: LRNS smoothing factor, 0.08 to 0.20 (default: 0.17).
+- `--hermanus-q-index {M,E}` *(Hermanus only)*: quiet-day pattern in the middle (`M`) or ends (`E`) of the UT day (default: `M`).
+- `--hermanus-q-start MINUTE`, `--hermanus-q-end MINUTE` *(Hermanus only)*: 1-based UT minute boundaries (`1 <= start < end <= 1440`; defaults: 300 and 1009).
+- `--hermanus-q-factor NT` *(Hermanus only)*: LRNS reference amplitude in nT (default: `0.01*K9`).
+- `--hermanus-seed INT` *(Hermanus only)*: reproducible guide-noise seed, 1 to 2147483646 (default: 1).
+- `--usgs-parameters PATH` *(USGS only)*: load an existing H/D calibration JSON instead of bootstrapping monthly.
+- `--usgs-parameters-output PATH` *(USGS only)*: save H/D calibration JSON for a single input calendar month.
+- `--usgs-mean-minutes N` *(USGS only)*: minutes per selected quiet mean (default: 60).
+- `--usgs-h-reference NT` *(USGS only)*: annual mean H reference in nT (default: input-month mean H).
+- `--context-file PATH` *(FMI, KASM, USGS)*: additional same-station input file for adjacent-day context (repeatable).
+- `--iaga-sample-step {1,60}` *(KASM, Hermanus, USGS)*: IAGA input cadence in seconds (default: 1; minute input: 60).
 
 ## Output and limitations
 
@@ -344,9 +358,10 @@ python3 run_pipeline.py
 Station defaults (`k9_limit`, `sq_estimator`, `bootstrap_days`, `minimum_coverage`) are configured in `stations.json`. Common pipeline flags:
 
 - `--station CODE`: run only specific station(s), e.g. `--station KIR --station WIC`.
+- `--method METHOD [METHOD ...]`: override the configured method(s) (`ih`, `fmi`, `kasm`, `hermanus`, `usgs`, or `all`).
 - `--output-dir DIR`: write outputs to a separate directory instead of the station folders.
-- `--sq-estimator {median,mean}`: override the configured SQ estimator for the run.
-- `--save-generated-sq`: save newly bootstrapped `YYYYMM<STA>sq` files to disk.
+- `--sq-estimator {median,mean}` *(IH only)*: override the configured SQ estimator for the run.
+- `--save-generated-sq` *(IH only)*: save newly bootstrapped `YYYYMM<STA>sq` files to disk.
 - `--dry-run`: preview the chronological SQ chaining and match statistics without writing files.
 
 ## Testing & CI
