@@ -41,7 +41,7 @@ An alternate IAF month can be selected as the bootstrap source with `--bootstrap
 
 ## Select the FMI method
 
-IH remains the default. Select FMI with `--method fmi`:
+Select FMI with `--method fmi`:
 
 ```bash
 python3 calculate_k_index.py KIR/KIR23DEC.BIN --method fmi \
