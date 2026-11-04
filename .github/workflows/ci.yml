@@ -50,7 +50,6 @@ jobs:
   build-docs:
     name: Build Algorithm PDF
     runs-on: ubuntu-latest
-    if: hashFiles('IH-method-flow.svg', 'SQ-file-creation.svg') != ''
     steps:
       - name: Checkout repository
         uses: actions/checkout@v4
