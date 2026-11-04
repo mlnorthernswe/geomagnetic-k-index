@@ -8,7 +8,7 @@ Python 3.10 or newer. IH, FMI, KASM, Hermanus LRNS, and USGS all use only the Py
 
 ## Quick start
 
-From the repository root, calculate WIC December 2023 indices, bootstrap an SQ curve from that month, save the curve, and write both CSV and IRF comprehensive output:
+The default method used is IH. From the repository root, calculate WIC December 2023 indices, bootstrap an SQ curve from that month, save the curve, and write both CSV and IRF comprehensive output:
 
 ```bash
 python3 calculate_k_index.py WIC/WIC23DEC.BIN \
