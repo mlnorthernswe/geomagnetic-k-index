@@ -27,7 +27,7 @@ python3 calculate_k_index.py KIR/kir202609qsec.sec.gz --input-format iaga \
   -o /tmp/iaga-k-index.csv
 ```
 
-IAGA component values are interpreted as nT and SQ values as pT. The SQ curve is interpolated to each sample timestamp. Alternatively, `--bootstrap-file` can point to an IAF month to construct the SQ curve. IAGA files do not contain stored K values, so the CSV's stored-K comparison columns are empty.
+IAGA component values are interpreted as nT and SQ values as pT. The SQ curve is interpolated to each sample timestamp. Alternatively, `--bootstrap-file` can point to an IAF `.BIN` or IAGA-2002 file (or be omitted to bootstrap directly from the IAGA input file itself) to construct the SQ curve. IAGA files do not contain stored K values, so the CSV's stored-K comparison columns are empty.
 
 To use an existing Kiruna SQ file:
 
@@ -52,9 +52,7 @@ python3 calculate_k_index.py KIR/KIR23DEC.BIN --method fmi \
 python3 run_pipeline.py --method fmi --output-dir /tmp/fmi-results
 ```
 
-FMI uses its own daily quiet-curve fit, rather than an IH monthly SQ file.
-SQ input/output and bootstrap files cannot be combined with FMI. The method is
-implemented in standard-library Python, ported from the attributed
+The method is implemented in standard-library Python, ported from the attributed
 [FMI 1.3 C reference](vendor/fmi/README.md). It preserves C integer truncation,
 single-precision harmonic arithmetic, and the original threshold comparisons.
 No compilation or downloads occur at runtime.
@@ -123,8 +121,7 @@ KASM uses **one-minute means**, with up to three hours from each available
 neighboring day. `--context-file` supplies neighboring data for the calculator;
 the pipeline uses available station months automatically. At missing neighbors,
 KASM follows the author's reduced-context behavior and still calculates indices.
-The summary reports how many days have reduced context. KASM does not require
-longitude, an SQ file, or an annual H value when using X/Y components.
+The summary reports how many days have reduced context.
 
 For one-minute IAGA input, provide its cadence explicitly:
 
@@ -289,7 +286,7 @@ the reference's daily K sum. Its legacy 6000 nT amplitude ceiling is retained.
 
 Pipeline configuration supports `"method": "usgs"`, `usgs_parameters` (a JSON
 path relative to the configuration directory), `usgs_mean_minutes`, and
-`usgs_h_reference`. Outputs use `-USGS` filenames. IH remains the default.
+`usgs_h_reference`. Outputs use `-USGS` filenames. 
 See [reference provenance and portability repairs](vendor/usgs/README.md) for
 numerical validation and the defined handling of archived edge-case bugs.
 
@@ -324,7 +321,7 @@ Run `python3 calculate_k_index.py --help` for all options.
 - `--comprehensive-output PATH`: also write daily K values in the IRF `comprehensive.txt` layout.
 - `--sq-input PATH` *(IH only)*: use an existing 24-row SQ file.
 - `--sq-output PATH` *(IH only)*: save the SQ curve used by this run in the same 24-row format.
-- `--bootstrap-file PATH` *(IH only)*: use another IAF month file to construct the SQ curve; defaults to the month being processed.
+- `--bootstrap-file PATH` *(IH only)*: use another IAF `.BIN` or IAGA-2002 (plain or `.gz`/`.bz2`/`.xz`) month file to construct the SQ curve; defaults to the month being processed.
 - `--bootstrap-days N` *(IH only)*: number of quietest valid days to use for bootstrap (default: 10).
 - `--sq-estimator {median,mean}` *(IH only)*: hourly estimator used when bootstrapping an SQ curve; `median` is recommended for high-latitude stations due to the risk of outliers even on quiet days (default: `median`).
 - `--longitude DEGREES` *(FMI only)*: observatory longitude in degrees east; defaults to the IAF header value.
