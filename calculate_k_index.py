@@ -224,12 +224,28 @@ def open_iaga_text(path: Path) -> TextIO:
     return path.open("r", encoding="ascii")
 
 
-def iter_iaga_days(
+def is_iaga_file(path: Path) -> bool:
+    suffix = path.suffix.lower()
+    if suffix in (".gz", ".gzip", ".bz2", ".bzip2", ".xz", ".lzma", ".sec", ".min", ".iaga", ".asc"):
+        return True
+    if suffix == ".bin":
+        return False
+    with path.open("rb") as raw:
+        head = raw.read(1024)
+    if head.startswith((b"\x1f\x8b", b"BZh", b"\xfd7zXZ\x00")):
+        return True
+    upper = head.upper()
+    if b"IAGA" in upper or (b"DATE" in upper and b"DOY" in upper):
+        return True
+    return False
+
+
+def iter_iaga_xyz_days(
     path: Path,
-) -> Iterator[tuple[date, list[tuple[float, float | None, float | None]]]]:
+) -> Iterator[tuple[date, list[tuple[float, float | None, float | None, float | None]]]]:
     component_columns: dict[str, int] | None = None
     current_day: date | None = None
-    day_samples: list[tuple[float, float | None, float | None]] = []
+    day_samples: list[tuple[float, float | None, float | None, float | None]] = []
     previous_timestamp: datetime | None = None
 
     try:
@@ -242,10 +258,10 @@ def iter_iaga_days(
                     component_columns = {
                         component: index
                         for index, field in enumerate(fields[3:], 3)
-                        for component in ("x", "y")
+                        for component in ("x", "y", "z")
                         if field.upper().endswith(component.upper())
                     }
-                    if set(component_columns) != {"x", "y"}:
+                    if not {"x", "y"}.issubset(component_columns):
                         raise ValueError(f"{path}:{line_number}: IAGA header must contain X and Y columns")
                     continue
                 if not fields[0][0:1].isdigit() or len(fields[0]) != 10 or fields[0][4] != "-":
@@ -254,10 +270,15 @@ def iter_iaga_days(
                     raise ValueError(f"{path}:{line_number}: IAGA data encountered before the DATE/TIME/DOY header")
                 try:
                     timestamp = datetime.fromisoformat(f"{fields[0]}T{fields[1]}")
-                    values = []
+                    values: list[float | None] = []
                     for component in ("x", "y"):
                         value = float(fields[component_columns[component]])
                         values.append(None if not math.isfinite(value) or abs(value) in (99999, 999999) else value)
+                    if "z" in component_columns and component_columns["z"] < len(fields):
+                        z_val = float(fields[component_columns["z"]])
+                        values.append(None if not math.isfinite(z_val) or abs(z_val) in (99999, 999999) else z_val)
+                    else:
+                        values.append(0.0)
                 except (IndexError, ValueError) as error:
                     raise ValueError(f"{path}:{line_number}: invalid IAGA timestamp or component value") from error
 
@@ -277,7 +298,7 @@ def iter_iaga_days(
                     + timestamp.second
                     + timestamp.microsecond / 1_000_000
                 )
-                day_samples.append((seconds_of_day, values[0], values[1]))
+                day_samples.append((seconds_of_day, values[0], values[1], values[2]))
     except (EOFError, lzma.LZMAError, gzip.BadGzipFile) as error:
         raise ValueError(f"{path}: invalid compressed IAGA file: {error}") from error
 
@@ -286,6 +307,94 @@ def iter_iaga_days(
     if current_day is None:
         raise ValueError(f"{path}: no IAGA data rows found")
     yield current_day, day_samples
+
+
+def iter_iaga_days(
+    path: Path,
+) -> Iterator[tuple[date, list[tuple[float, float | None, float | None]]]]:
+    for day, samples in iter_iaga_xyz_days(path):
+        yield day, [(sec, x, y) for sec, x, y, _ in samples]
+
+
+def bootstrap_iaga_sq_curve(
+    path: Path,
+    k9_nT: float | None,
+    quiet_day_count: int = 10,
+    estimator: str = "median",
+) -> tuple[dict[str, tuple[float, ...]], list[str]]:
+    if quiet_day_count < 1:
+        raise ValueError("bootstrap day count must be at least 1")
+    if k9_nT is None or not math.isfinite(k9_nT) or k9_nT <= 0:
+        raise ValueError("--k9-limit is required when bootstrapping an SQ curve from an IAGA file")
+    if estimator == "median":
+        aggregate = statistics.median
+    elif estimator == "mean":
+        aggregate = statistics.fmean
+    else:
+        raise ValueError(f"unsupported SQ estimator: {estimator}")
+
+    candidates: list[
+        tuple[tuple[int, int, int], str, dict[str, list[float | None]]]
+    ] = []
+    for day, samples in iter_iaga_xyz_days(path):
+        hourly_bins: dict[str, list[list[float]]] = {
+            c: [[] for _ in range(24)] for c in ("x", "y", "z")
+        }
+        interval_bins: dict[str, list[list[float]]] = {
+            c: [[] for _ in range(8)] for c in ("x", "y")
+        }
+        for sec, x_nT, y_nT, z_nT in samples:
+            hour = min(int(sec // 3600), 23)
+            interval = min(int(sec // 10800), 7)
+            if x_nT is not None:
+                x_pt = x_nT * 1000.0
+                hourly_bins["x"][hour].append(x_pt)
+                interval_bins["x"][interval].append(x_pt)
+            if y_nT is not None:
+                y_pt = y_nT * 1000.0
+                hourly_bins["y"][hour].append(y_pt)
+                interval_bins["y"][interval].append(y_pt)
+            if z_nT is not None:
+                hourly_bins["z"][hour].append(z_nT * 1000.0)
+
+        if any(not b for b in interval_bins["x"]) or any(not b for b in interval_bins["y"]):
+            continue
+        daily_k = [
+            max(
+                classify_range_pt(max(interval_bins["x"][i]) - min(interval_bins["x"][i]), int(round(k9_nT))),
+                classify_range_pt(max(interval_bins["y"][i]) - min(interval_bins["y"][i]), int(round(k9_nT))),
+            )
+            for i in range(8)
+        ]
+        score = (sum(daily_k), sum(value * value for value in daily_k), max(daily_k))
+        day_means = {
+            c: [statistics.fmean(vals) if vals else None for vals in hourly_bins[c]]
+            for c in ("x", "y", "z")
+        }
+        candidates.append((score, day.isoformat(), day_means))
+
+    if len(candidates) < quiet_day_count:
+        raise ValueError(
+            f"cannot bootstrap from {quiet_day_count} quiet days: "
+            f"only {len(candidates)} IAGA day(s) have all eight three-hour intervals"
+        )
+
+    selected = sorted(candidates, key=lambda item: (item[0], item[1]))[:quiet_day_count]
+    curve: dict[str, tuple[float, ...]] = {}
+    for component in ("x", "y", "z"):
+        hourly_values: list[float] = []
+        for hour in range(24):
+            samples_pt = [
+                day_means[component][hour]
+                for _, _, day_means in selected
+                if day_means[component][hour] is not None
+            ]
+            if not samples_pt:
+                raise ValueError(f"cannot bootstrap {component.upper()} SQ: hour {hour:02d} is missing")
+            hourly_values.append(aggregate(samples_pt))
+        curve[component] = tuple(hourly_values)
+
+    return curve, [day for _, day, _ in selected]
 
 
 def calculate_iaga_day(
@@ -585,7 +694,7 @@ def main() -> int:
     parser.add_argument(
         "--bootstrap-file",
         type=Path,
-        help="IAF month file used to create an SQ curve (default: IAF input file)",
+        help="IAF or IAGA-2002 month file used to create an SQ curve (default: input file)",
     )
     parser.add_argument("--bootstrap-days", type=int, default=10, help="quietest days to use (default: 10)")
     parser.add_argument(
@@ -657,14 +766,6 @@ def main() -> int:
         parser.error("--k9-limit is required with --input-format iaga")
     if args.sq_input and args.sq_file:
         parser.error("use either --sq-input or the positional SQ file, not both")
-    if (
-        "ih" in methods
-        and args.input_format == "iaga"
-        and not args.sq_input
-        and not args.sq_file
-        and not args.bootstrap_file
-    ):
-        parser.error("IAGA input requires --sq-input or an IAF --bootstrap-file")
 
     comp_paths = (
         {m: resolve_comprehensive_output_path(args.comprehensive_output, m, multi_method) for m in methods}
@@ -798,13 +899,31 @@ def main() -> int:
                     bootstrap_description = f"SQ file {sq_input}"
                 else:
                     bootstrap_path = args.bootstrap_file or args.input_file
-                    if records is not None and bootstrap_path.resolve() == args.input_file.resolve():
-                        bootstrap_records = records
-                    else:
-                        bootstrap_records = parse_month_file(bootstrap_path)
-                    sq, quiet_days = bootstrap_sq_curve(
-                        bootstrap_records, args.bootstrap_days, estimator=args.sq_estimator
+                    bootstrap_is_iaga = (
+                        args.input_format == "iaga"
+                        if bootstrap_path.resolve() == args.input_file.resolve()
+                        else is_iaga_file(bootstrap_path)
                     )
+                    if bootstrap_is_iaga:
+                        bootstrap_k9 = (
+                            args.k9_limit
+                            if args.k9_limit is not None
+                            else (records[0][10] if records else None)
+                        )
+                        sq, quiet_days = bootstrap_iaga_sq_curve(
+                            bootstrap_path,
+                            bootstrap_k9,
+                            args.bootstrap_days,
+                            estimator=args.sq_estimator,
+                        )
+                    else:
+                        if records is not None and bootstrap_path.resolve() == args.input_file.resolve():
+                            bootstrap_records = records
+                        else:
+                            bootstrap_records = parse_month_file(bootstrap_path)
+                        sq, quiet_days = bootstrap_sq_curve(
+                            bootstrap_records, args.bootstrap_days, estimator=args.sq_estimator
+                        )
                     bootstrap_description = (
                         f"bootstrapped SQ ({args.sq_estimator}) from {bootstrap_path} using {len(quiet_days)} quiet days: "
                         f"{', '.join(quiet_days)}"
@@ -812,7 +931,7 @@ def main() -> int:
                 if args.sq_output and args.sq_output.resolve() == args.input_file.resolve():
                     parser.error("SQ output must not overwrite the input file")
                 if args.sq_output and bootstrap_path and args.sq_output.resolve() == bootstrap_path.resolve():
-                    parser.error("SQ output must not overwrite the IAF bootstrap file")
+                    parser.error("SQ output must not overwrite the bootstrap file")
                 if args.input_format == "iaga":
                     method_rows = []
                     processed_days = 0

@@ -55,6 +55,61 @@ class TestKIndexUnit(unittest.TestCase):
         self.assertEqual(len(days_median), 10)
         self.assertNotEqual(sq_median["x"], sq_mean["x"])
 
+    def test_bootstrap_from_iaga_file(self) -> None:
+        import gzip
+        import subprocess
+        import sys
+
+        with tempfile.TemporaryDirectory() as tmp:
+            tmp_dir = Path(tmp)
+            iaga_gz = tmp_dir / "bootstrap.sec.gz"
+            lines = ["DATE TIME DOY KIRX KIRY KIRZ\n"]
+            for day_num in (1, 2, 3):
+                disturbance = 0.0 if day_num < 3 else 200.0
+                for hour in range(24):
+                    x_val = 10500.0 + hour + (disturbance if hour in (3, 4) else 0.0)
+                    y_val = 200.0 + hour * 0.5
+                    z_val = 52000.0 - hour
+                    lines.append(
+                        f"2023-11-0{day_num} {hour:02d}:00:00 30{4 + day_num} {x_val:.1f} {y_val:.1f} {z_val:.1f}\n"
+                    )
+                    lines.append(
+                        f"2023-11-0{day_num} {hour:02d}:30:00 30{4 + day_num} {x_val:.1f} {y_val:.1f} {z_val:.1f}\n"
+                    )
+            with gzip.open(iaga_gz, "wt", encoding="ascii") as handle:
+                handle.writelines(lines)
+
+            sq, quiet_days = ih.bootstrap_iaga_sq_curve(
+                iaga_gz, k9_nT=1500, quiet_day_count=2, estimator="median"
+            )
+            self.assertEqual(quiet_days, ["2023-11-01", "2023-11-02"])
+            self.assertEqual(len(sq["x"]), 24)
+            self.assertAlmostEqual(sq["x"][0], 10500.0 * 1000.0)
+            self.assertAlmostEqual(sq["z"][0], 52000.0 * 1000.0)
+
+            out_csv = tmp_dir / "out.csv"
+            sq_out = tmp_dir / "sq_out.txt"
+            result = subprocess.run(
+                [
+                    sys.executable,
+                    str(REPO_ROOT / "calculate_k_index.py"),
+                    str(REPO_ROOT / "KIR" / "KIR23DEC.BIN"),
+                    "--bootstrap-file",
+                    str(iaga_gz),
+                    "--bootstrap-days",
+                    "2",
+                    "--sq-output",
+                    str(sq_out),
+                    "-o",
+                    str(out_csv),
+                ],
+                capture_output=True,
+                text=True,
+            )
+            self.assertEqual(result.returncode, 0, result.stderr)
+            self.assertTrue(out_csv.is_file())
+            self.assertTrue(sq_out.is_file())
+
 
 class TestRegressionAndPipeline(unittest.TestCase):
     def test_wic_dec_2023_regression(self) -> None:
