@@ -1,0 +1,1299 @@
+{
+  "sources": {
+    "2023-12": "https://cloud.irf.se/s/xqtr7ZiJdsnZxxz",
+    "2024-05": "https://cloud.irf.se/s/WWcmCyBQwoGFXHr"
+  },
+  "description": "KAsm rows visually transcribed from all 72 JPGs. Eight three-hour UTC indices per image. Smoothing 1.",
+  "inputs": [
+    {
+      "path": "BEL/bel23dec.bin",
+      "sha256": "1e323347c4dff4a69046a4b7c552eac2468da759999bc1fd1c41e8334b88a2e7"
+    },
+    {
+      "path": "BEL/bel23nov.bin",
+      "sha256": "acc98a40d4de0a9d793ad8e3307af8a0a13aa52a583ddfb1897bac969210ac0e"
+    },
+    {
+      "path": "BEL/bel24apr.bin",
+      "sha256": "99e131c07788c9da743d493e4fed5dea20411662d98cf15ca575e6079f12dd9c"
+    },
+    {
+      "path": "BEL/bel24may.bin",
+      "sha256": "ab80baa75423911302b593287d3831a4dbf9bd23fb1b4201f73d53783892b252"
+    },
+    {
+      "path": "HYB/HYB23Dec.bin",
+      "sha256": "7f51b1319e8fb99d1386799e29b5470050d965c4ede83426c2a3d6cf9a913161"
+    },
+    {
+      "path": "HYB/HYB23Nov.bin",
+      "sha256": "dc33cfd1e5b8bf3409eb2bfd727022e1a5fb073a7e970b8c56b28ceb8c810607"
+    },
+    {
+      "path": "HYB/HYB24Apr.bin",
+      "sha256": "9c2ce3eddf7655c5b3f572a06a91e0211122878418bd05b65367773dd3dd22b4"
+    },
+    {
+      "path": "HYB/HYB24May.bin",
+      "sha256": "47a9803ea976a5237491dcb6fcb3c8067a8dde46500964019091475227af92e8"
+    },
+    {
+      "path": "KIR/KIR23DEC.BIN",
+      "sha256": "9cf6c488b8902c866ac24ccf20760cf51565e227b00e1d6fca63030dafc90212"
+    },
+    {
+      "path": "KIR/KIR23NOV.BIN",
+      "sha256": "ca2a3e714a46843eaee4f38e118e03fa7f0dc06b1d787a77c52ac4cdf75d692e"
+    },
+    {
+      "path": "KIR/KIR24APR.BIN",
+      "sha256": "acd94fd2b02c36a33a8699adac7c3a816a2ff8fc5692553a81d928df8bffe910"
+    },
+    {
+      "path": "KIR/KIR24MAY.BIN",
+      "sha256": "4a327381c450879e971f954bd3433e512bf221bf9aa6f693ccb29870826a8788"
+    },
+    {
+      "path": "WIC/WIC23DEC.BIN",
+      "sha256": "a2431bc8777e82b4dfef129bca81783dce369978b4e2e8175e32582d7f7b9f88"
+    },
+    {
+      "path": "WIC/WIC23NOV.BIN",
+      "sha256": "613066674a161415cfd91c3764512b0a0b60f5a6fa2354926cc98d51925a808e"
+    },
+    {
+      "path": "WIC/WIC24APR.BIN",
+      "sha256": "cd73a39dbafeea416845f171e7d0ad4dbb389d57f05e9a1b4a4e17750167cac5"
+    },
+    {
+      "path": "WIC/WIC24MAY.BIN",
+      "sha256": "7c82620a548e5910b0f30d7c0dae2dcf83ca3e381f3a72a17a3e0231d5f960db"
+    }
+  ],
+  "days": [
+    {
+      "station": "BEL",
+      "date": "2023-12-21",
+      "k9_nT": 450,
+      "image": "bel_20231221.jpg",
+      "image_sha256": "10c99cf334d1b5777fc78db22e962a434b57d261538b7fb278800f1861e096e9",
+      "expected_k": [
+        3,
+        1,
+        1,
+        2,
+        1,
+        2,
+        1,
+        0
+      ]
+    },
+    {
+      "station": "BEL",
+      "date": "2023-12-22",
+      "k9_nT": 450,
+      "image": "bel_20231222.jpg",
+      "image_sha256": "29aeda695488baea4ffa7444eb9d3f50671675c125591aae01cab85086fc7b89",
+      "expected_k": [
+        0,
+        1,
+        1,
+        1,
+        0,
+        1,
+        1,
+        1
+      ]
+    },
+    {
+      "station": "BEL",
+      "date": "2023-12-23",
+      "k9_nT": 450,
+      "image": "bel_20231223.jpg",
+      "image_sha256": "6ee2629798e30d0e6d2640c9dcf3ce1a50d53aeb63e3dde625e7456b6b3143e3",
+      "expected_k": [
+        1,
+        1,
+        1,
+        1,
+        2,
+        3,
+        1,
+        1
+      ]
+    },
+    {
+      "station": "BEL",
+      "date": "2023-12-24",
+      "k9_nT": 450,
+      "image": "bel_20231224.jpg",
+      "image_sha256": "73776d0513acb897d2b6399df4fc7ba7d9b3b33480160f8023bbd154270a29f5",
+      "expected_k": [
+        3,
+        2,
+        2,
+        2,
+        2,
+        2,
+        2,
+        2
+      ]
+    },
+    {
+      "station": "BEL",
+      "date": "2023-12-25",
+      "k9_nT": 450,
+      "image": "bel_20231225.jpg",
+      "image_sha256": "fd3442dd19cc71ff563daccd113a0d930a79264d296699795ce3f875bb2723b7",
+      "expected_k": [
+        0,
+        1,
+        1,
+        1,
+        1,
+        1,
+        2,
+        1
+      ]
+    },
+    {
+      "station": "BEL",
+      "date": "2023-12-26",
+      "k9_nT": 450,
+      "image": "bel_20231226.jpg",
+      "image_sha256": "ec1df3bd2064fc6adc820c9d5ff3be7bbd8ee8575605bb8d109e5e6319e3e3f4",
+      "expected_k": [
+        0,
+        1,
+        1,
+        2,
+        2,
+        2,
+        1,
+        0
+      ]
+    },
+    {
+      "station": "BEL",
+      "date": "2023-12-27",
+      "k9_nT": 450,
+      "image": "bel_20231227.jpg",
+      "image_sha256": "61e3c1f622a7dc779c3cdd4740c22a00a6433e551adea110f7efad28165726dd",
+      "expected_k": [
+        2,
+        2,
+        1,
+        2,
+        1,
+        1,
+        1,
+        1
+      ]
+    },
+    {
+      "station": "BEL",
+      "date": "2023-12-28",
+      "k9_nT": 450,
+      "image": "bel_20231228.jpg",
+      "image_sha256": "daadc7840ff105dc2423f3f57e43be38d142c8fa584e9c63e253c9bda3d47b39",
+      "expected_k": [
+        0,
+        0,
+        1,
+        1,
+        0,
+        1,
+        0,
+        2
+      ]
+    },
+    {
+      "station": "BEL",
+      "date": "2023-12-29",
+      "k9_nT": 450,
+      "image": "bel_20231229.jpg",
+      "image_sha256": "d9ba7ecd85d3085094b806cea60be256905ceecd24a6bbb7e31f6e3fc18da921",
+      "expected_k": [
+        1,
+        1,
+        1,
+        2,
+        2,
+        1,
+        2,
+        3
+      ]
+    },
+    {
+      "station": "BEL",
+      "date": "2023-12-30",
+      "k9_nT": 450,
+      "image": "bel_20231230.jpg",
+      "image_sha256": "0380dd302b26509e6c630ab739f1adb6e63e4cc1bc3e647eeb53e30da1277542",
+      "expected_k": [
+        1,
+        2,
+        2,
+        2,
+        1,
+        1,
+        1,
+        0
+      ]
+    },
+    {
+      "station": "BEL",
+      "date": "2024-05-08",
+      "k9_nT": 450,
+      "image": "bel_20240508.jpg",
+      "image_sha256": "ecd5d7fc73003018989765bdb3916c14aa0a288ac28e4e19ad1d809e080ae101",
+      "expected_k": [
+        1,
+        2,
+        2,
+        3,
+        3,
+        2,
+        1,
+        1
+      ]
+    },
+    {
+      "station": "BEL",
+      "date": "2024-05-09",
+      "k9_nT": 450,
+      "image": "bel_20240509.jpg",
+      "image_sha256": "14c5994926fdfb83e8623e4a685302c46e7c3b97c7cbd17d48308b1034fad4aa",
+      "expected_k": [
+        1,
+        2,
+        1,
+        2,
+        2,
+        1,
+        3,
+        2
+      ]
+    },
+    {
+      "station": "BEL",
+      "date": "2024-05-10",
+      "k9_nT": 450,
+      "image": "bel_20240510.jpg",
+      "image_sha256": "89a885ead01d8cb3ae5fefc50fe8cc6e9d0ac6b065edf23b70cac9329dbced9e",
+      "expected_k": [
+        3,
+        3,
+        3,
+        2,
+        3,
+        8,
+        8,
+        9
+      ]
+    },
+    {
+      "station": "BEL",
+      "date": "2024-05-11",
+      "k9_nT": 450,
+      "image": "bel_20240511.jpg",
+      "image_sha256": "8a6553bd0fb9f1415eef1eb94efcb39c9c1bd608addf7ed6aeef7384946d11f8",
+      "expected_k": [
+        8,
+        8,
+        8,
+        9,
+        8,
+        8,
+        7,
+        7
+      ]
+    },
+    {
+      "station": "BEL",
+      "date": "2024-05-12",
+      "k9_nT": 450,
+      "image": "bel_20240512.jpg",
+      "image_sha256": "9b2f04762e0739a158d651937455f37f3bee5dd4e55d481b3ac2d6a066cac386",
+      "expected_k": [
+        5,
+        6,
+        3,
+        5,
+        3,
+        3,
+        4,
+        6
+      ]
+    },
+    {
+      "station": "BEL",
+      "date": "2024-05-13",
+      "k9_nT": 450,
+      "image": "bel_20240513.jpg",
+      "image_sha256": "57e84e8b9ffe7d71efe8c6a1593c942e583783638f957ad0e85b3c7cdb3989cb",
+      "expected_k": [
+        4,
+        5,
+        3,
+        4,
+        4,
+        4,
+        3,
+        2
+      ]
+    },
+    {
+      "station": "BEL",
+      "date": "2024-05-14",
+      "k9_nT": 450,
+      "image": "bel_20240514.jpg",
+      "image_sha256": "6ebfb39c160a690fdd98845695fc5023e0e96b837d8a7540774b3efb956974ba",
+      "expected_k": [
+        1,
+        2,
+        1,
+        3,
+        3,
+        2,
+        2,
+        0
+      ]
+    },
+    {
+      "station": "BEL",
+      "date": "2024-05-15",
+      "k9_nT": 450,
+      "image": "bel_20240515.jpg",
+      "image_sha256": "f70a14debf92c6eb34c0ad2f17a8f3776bcf4dc494b37fc5e113d765c2fc872c",
+      "expected_k": [
+        1,
+        2,
+        3,
+        3,
+        3,
+        2,
+        3,
+        3
+      ]
+    },
+    {
+      "station": "HYB",
+      "date": "2023-12-21",
+      "k9_nT": 300,
+      "image": "hyb_20231221.jpg",
+      "image_sha256": "abd2ec39ded3d25f0cafa88a26cbba91754261425f5a42b5a4016d8a3565e38d",
+      "expected_k": [
+        3,
+        1,
+        1,
+        2,
+        1,
+        1,
+        0,
+        0
+      ]
+    },
+    {
+      "station": "HYB",
+      "date": "2023-12-22",
+      "k9_nT": 300,
+      "image": "hyb_20231222.jpg",
+      "image_sha256": "73c529d96efc60f8306b430f121120b07ea70033853f9de2340c265cce0e2bad",
+      "expected_k": [
+        0,
+        1,
+        1,
+        1,
+        0,
+        0,
+        0,
+        0
+      ]
+    },
+    {
+      "station": "HYB",
+      "date": "2023-12-23",
+      "k9_nT": 300,
+      "image": "hyb_20231223.jpg",
+      "image_sha256": "e42c078b9077df7f7e0cb0d9e3c1b5c66baad312dea7796994c8b03bbad84734",
+      "expected_k": [
+        1,
+        2,
+        2,
+        1,
+        2,
+        2,
+        1,
+        2
+      ]
+    },
+    {
+      "station": "HYB",
+      "date": "2023-12-24",
+      "k9_nT": 300,
+      "image": "hyb_20231224.jpg",
+      "image_sha256": "a151e81190d6eabecca82eb620fb2247d938ae8d46eac05815ee46e91c39c99c",
+      "expected_k": [
+        1,
+        1,
+        2,
+        3,
+        1,
+        2,
+        1,
+        1
+      ]
+    },
+    {
+      "station": "HYB",
+      "date": "2023-12-25",
+      "k9_nT": 300,
+      "image": "hyb_20231225.jpg",
+      "image_sha256": "807517a96dd6ac192e99b18e76887ac94078df6505777654c4148fa63759348e",
+      "expected_k": [
+        1,
+        1,
+        2,
+        1,
+        1,
+        1,
+        2,
+        0
+      ]
+    },
+    {
+      "station": "HYB",
+      "date": "2023-12-26",
+      "k9_nT": 300,
+      "image": "hyb_20231226.jpg",
+      "image_sha256": "06df453e2d58e88e2383cf497e0192810aa01490fb6dcd3d6b436d2b43d6b07d",
+      "expected_k": [
+        0,
+        3,
+        2,
+        2,
+        2,
+        1,
+        1,
+        1
+      ]
+    },
+    {
+      "station": "HYB",
+      "date": "2023-12-27",
+      "k9_nT": 300,
+      "image": "hyb_20231227.jpg",
+      "image_sha256": "1c24da655372298cf8ada0d33de9ce93a62c9a6e643c9d61275b147889698439",
+      "expected_k": [
+        1,
+        1,
+        1,
+        1,
+        2,
+        1,
+        1,
+        1
+      ]
+    },
+    {
+      "station": "HYB",
+      "date": "2023-12-28",
+      "k9_nT": 300,
+      "image": "hyb_20231228.jpg",
+      "image_sha256": "72d4b1e33425eff934efa5163811ded12fd999ac886f4ea0b5a8d26489836bf9",
+      "expected_k": [
+        1,
+        0,
+        1,
+        1,
+        0,
+        0,
+        0,
+        2
+      ]
+    },
+    {
+      "station": "HYB",
+      "date": "2023-12-29",
+      "k9_nT": 300,
+      "image": "hyb_20231229.jpg",
+      "image_sha256": "ccbbc566d57c8e4863197486e563d940939b7d89b8b58b822e9b5bbb2f8b2b1d",
+      "expected_k": [
+        1,
+        2,
+        2,
+        2,
+        3,
+        2,
+        2,
+        2
+      ]
+    },
+    {
+      "station": "HYB",
+      "date": "2023-12-30",
+      "k9_nT": 300,
+      "image": "hyb_20231230.jpg",
+      "image_sha256": "64a3a15be38f2c38b6d86d772a198b1868d8a6d4ba08bd51b504f3d7e0f0ee2f",
+      "expected_k": [
+        2,
+        3,
+        3,
+        2,
+        1,
+        1,
+        1,
+        0
+      ]
+    },
+    {
+      "station": "HYB",
+      "date": "2024-05-08",
+      "k9_nT": 300,
+      "image": "hyb_20240508.jpg",
+      "image_sha256": "fb7d11c85021a00e80a1e15a470ff298eeae26dae0b1e12044381dcc001b5dfd",
+      "expected_k": [
+        2,
+        2,
+        2,
+        2,
+        2,
+        2,
+        0,
+        0
+      ]
+    },
+    {
+      "station": "HYB",
+      "date": "2024-05-09",
+      "k9_nT": 300,
+      "image": "hyb_20240509.jpg",
+      "image_sha256": "0e98d78560e682b4ce1349847d861f9e56a53cfa3e6afd0878fe623e9991f92b",
+      "expected_k": [
+        1,
+        2,
+        2,
+        3,
+        1,
+        1,
+        2,
+        2
+      ]
+    },
+    {
+      "station": "HYB",
+      "date": "2024-05-10",
+      "k9_nT": 300,
+      "image": "hyb_20240510.jpg",
+      "image_sha256": "8ee64daa1fe8dd0755e6569d5437444473702c7124c3ce02f549e16d14857383",
+      "expected_k": [
+        2,
+        3,
+        4,
+        2,
+        3,
+        6,
+        8,
+        7
+      ]
+    },
+    {
+      "station": "HYB",
+      "date": "2024-05-11",
+      "k9_nT": 300,
+      "image": "hyb_20240511.jpg",
+      "image_sha256": "37462f163f61bde357fdbaa47479a6b250bbed7012e91b80f8780ed1729bd1f5",
+      "expected_k": [
+        7,
+        7,
+        8,
+        7,
+        7,
+        6,
+        6,
+        5
+      ]
+    },
+    {
+      "station": "HYB",
+      "date": "2024-05-12",
+      "k9_nT": 300,
+      "image": "hyb_20240512.jpg",
+      "image_sha256": "3e30f8e3a18c3badd76a671c74643a0d98b381cfb0101ae87d6390ddb03ed26d",
+      "expected_k": [
+        5,
+        5,
+        3,
+        5,
+        2,
+        1,
+        2,
+        5
+      ]
+    },
+    {
+      "station": "HYB",
+      "date": "2024-05-13",
+      "k9_nT": 300,
+      "image": "hyb_20240513.jpg",
+      "image_sha256": "e4d4816c3b62877c55e10de69b6666adf32d9bd2a46ada074f764641d1b03ee9",
+      "expected_k": [
+        3,
+        3,
+        4,
+        4,
+        3,
+        3,
+        2,
+        2
+      ]
+    },
+    {
+      "station": "HYB",
+      "date": "2024-05-14",
+      "k9_nT": 300,
+      "image": "hyb_20240514.jpg",
+      "image_sha256": "fbf14b85d8d459237c46278d46e470474b4e9f0f48f86dd84fc37bed81c8d0ba",
+      "expected_k": [
+        2,
+        2,
+        2,
+        2,
+        2,
+        1,
+        2,
+        0
+      ]
+    },
+    {
+      "station": "HYB",
+      "date": "2024-05-15",
+      "k9_nT": 300,
+      "image": "hyb_20240515.jpg",
+      "image_sha256": "52e069859d34659c3439cbb4dbed94e477e198fd3ebb6604306279ed558f3443",
+      "expected_k": [
+        1,
+        2,
+        3,
+        2,
+        2,
+        1,
+        2,
+        2
+      ]
+    },
+    {
+      "station": "KIR",
+      "date": "2023-12-21",
+      "k9_nT": 1500,
+      "image": "kir_20231221.jpg",
+      "image_sha256": "7c2fb1db505606c5273dbac2bdf0b2f7296767cd69763e34b4e66996c7f72393",
+      "expected_k": [
+        4,
+        0,
+        0,
+        0,
+        0,
+        1,
+        1,
+        0
+      ]
+    },
+    {
+      "station": "KIR",
+      "date": "2023-12-22",
+      "k9_nT": 1500,
+      "image": "kir_20231222.jpg",
+      "image_sha256": "9404b176599a8e183b6229a07ba7ef1acb3705446aef06d0c0fefdd627a39403",
+      "expected_k": [
+        0,
+        0,
+        0,
+        0,
+        0,
+        0,
+        0,
+        0
+      ]
+    },
+    {
+      "station": "KIR",
+      "date": "2023-12-23",
+      "k9_nT": 1500,
+      "image": "kir_20231223.jpg",
+      "image_sha256": "841a9e7cd55a51153e282724bd4b30ae783c4854422e136f34baa2a042f8f7df",
+      "expected_k": [
+        0,
+        0,
+        0,
+        1,
+        0,
+        3,
+        0,
+        1
+      ]
+    },
+    {
+      "station": "KIR",
+      "date": "2023-12-24",
+      "k9_nT": 1500,
+      "image": "kir_20231224.jpg",
+      "image_sha256": "9529e6ba9b39ca174d68385c65ab15b78c4f6083cd8b1bd513afa81b65d05d7b",
+      "expected_k": [
+        3,
+        3,
+        3,
+        2,
+        1,
+        1,
+        1,
+        1
+      ]
+    },
+    {
+      "station": "KIR",
+      "date": "2023-12-25",
+      "k9_nT": 1500,
+      "image": "kir_20231225.jpg",
+      "image_sha256": "4207241e01c34c1bddf162e1da1680efc99721955e2e6ee1f2910bd4e4b23a7c",
+      "expected_k": [
+        0,
+        1,
+        1,
+        0,
+        0,
+        0,
+        1,
+        0
+      ]
+    },
+    {
+      "station": "KIR",
+      "date": "2023-12-26",
+      "k9_nT": 1500,
+      "image": "kir_20231226.jpg",
+      "image_sha256": "e0f807c76a01de9fd8e45e0d63110f8bfc979433de2046a309b1e6048c518b8e",
+      "expected_k": [
+        0,
+        1,
+        1,
+        0,
+        1,
+        0,
+        0,
+        0
+      ]
+    },
+    {
+      "station": "KIR",
+      "date": "2023-12-27",
+      "k9_nT": 1500,
+      "image": "kir_20231227.jpg",
+      "image_sha256": "32983c0aa3ecd03180690595141bc44c990eb9b72f3545c46335915e7509e9ac",
+      "expected_k": [
+        2,
+        1,
+        1,
+        1,
+        0,
+        0,
+        1,
+        0
+      ]
+    },
+    {
+      "station": "KIR",
+      "date": "2023-12-28",
+      "k9_nT": 1500,
+      "image": "kir_20231228.jpg",
+      "image_sha256": "5c2d86b5a8b2bc59085a793f1c612313d75662e4f9cd7e0b340caa3c134eae39",
+      "expected_k": [
+        0,
+        0,
+        0,
+        0,
+        0,
+        0,
+        0,
+        0
+      ]
+    },
+    {
+      "station": "KIR",
+      "date": "2023-12-29",
+      "k9_nT": 1500,
+      "image": "kir_20231229.jpg",
+      "image_sha256": "a1d49ef65fb616fa7a04cb4210c988b9d420f96145b01f353f71fd0d9dc3c22e",
+      "expected_k": [
+        1,
+        1,
+        1,
+        1,
+        1,
+        0,
+        1,
+        3
+      ]
+    },
+    {
+      "station": "KIR",
+      "date": "2023-12-30",
+      "k9_nT": 1500,
+      "image": "kir_20231230.jpg",
+      "image_sha256": "1e8ef30a0fa419b4d432da19bc586c191af49d1f2c1bf044f3bf9563c10272f9",
+      "expected_k": [
+        0,
+        1,
+        0,
+        0,
+        0,
+        0,
+        0,
+        0
+      ]
+    },
+    {
+      "station": "KIR",
+      "date": "2024-05-08",
+      "k9_nT": 1500,
+      "image": "kir_20240508.jpg",
+      "image_sha256": "9a54b4642b459bffc6dd6bac9e5391e7f5a240d1928dc551bc78b2efc07e4877",
+      "expected_k": [
+        0,
+        2,
+        1,
+        2,
+        2,
+        2,
+        0,
+        0
+      ]
+    },
+    {
+      "station": "KIR",
+      "date": "2024-05-09",
+      "k9_nT": 1500,
+      "image": "kir_20240509.jpg",
+      "image_sha256": "32ce8decb2e70f6d636b1869d0676af043a1ad34c9036ae3cda8d60bd1e5adc7",
+      "expected_k": [
+        0,
+        2,
+        0,
+        2,
+        1,
+        1,
+        2,
+        1
+      ]
+    },
+    {
+      "station": "KIR",
+      "date": "2024-05-10",
+      "k9_nT": 1500,
+      "image": "kir_20240510.jpg",
+      "image_sha256": "3429be77710df4e8e3c065273b7e3f076e1ac8677312933717c39332c665862f",
+      "expected_k": [
+        5,
+        3,
+        2,
+        2,
+        3,
+        6,
+        7,
+        8
+      ]
+    },
+    {
+      "station": "KIR",
+      "date": "2024-05-11",
+      "k9_nT": 1500,
+      "image": "kir_20240511.jpg",
+      "image_sha256": "85401cc05fdde7c43ae73d9b9c03f7f3fff275be5ac7c118d807fe11382e6520",
+      "expected_k": [
+        8,
+        8,
+        8,
+        8,
+        9,
+        7,
+        8,
+        8
+      ]
+    },
+    {
+      "station": "KIR",
+      "date": "2024-05-12",
+      "k9_nT": 1500,
+      "image": "kir_20240512.jpg",
+      "image_sha256": "bb5f66b94fcb314a093e5a6b7bd0773d2edf069da474a597ead615b6601dc1cb",
+      "expected_k": [
+        8,
+        8,
+        4,
+        5,
+        3,
+        4,
+        7,
+        8
+      ]
+    },
+    {
+      "station": "KIR",
+      "date": "2024-05-13",
+      "k9_nT": 1500,
+      "image": "kir_20240513.jpg",
+      "image_sha256": "28dc84dbcc654c12bf2868607a98282cf74cfd751689446acade13252d3bd046",
+      "expected_k": [
+        4,
+        6,
+        4,
+        3,
+        4,
+        3,
+        2,
+        2
+      ]
+    },
+    {
+      "station": "KIR",
+      "date": "2024-05-14",
+      "k9_nT": 1500,
+      "image": "kir_20240514.jpg",
+      "image_sha256": "ca84f13841facfb99adb95f5975365ef90e65dd8453c57588675e4f669047276",
+      "expected_k": [
+        2,
+        1,
+        1,
+        3,
+        3,
+        2,
+        2,
+        0
+      ]
+    },
+    {
+      "station": "KIR",
+      "date": "2024-05-15",
+      "k9_nT": 1500,
+      "image": "kir_20240515.jpg",
+      "image_sha256": "42c2f1d524d0502c8c57270d8ffdba051c562b76de2aac81bd6bd9c3bb64cea4",
+      "expected_k": [
+        1,
+        2,
+        3,
+        3,
+        3,
+        3,
+        4,
+        5
+      ]
+    },
+    {
+      "station": "WIC",
+      "date": "2023-12-21",
+      "k9_nT": 500,
+      "image": "wic_20231221.jpg",
+      "image_sha256": "fca872fe68e54a8ae6a873df28a51450db179808c72b0d1d2bd55031558367d8",
+      "expected_k": [
+        3,
+        0,
+        0,
+        1,
+        0,
+        1,
+        0,
+        0
+      ]
+    },
+    {
+      "station": "WIC",
+      "date": "2023-12-22",
+      "k9_nT": 500,
+      "image": "wic_20231222.jpg",
+      "image_sha256": "8cd671979290ebefb93824f839a546f4d58738d322728132f828de1cf9dc8b73",
+      "expected_k": [
+        0,
+        0,
+        0,
+        1,
+        0,
+        0,
+        0,
+        0
+      ]
+    },
+    {
+      "station": "WIC",
+      "date": "2023-12-23",
+      "k9_nT": 500,
+      "image": "wic_20231223.jpg",
+      "image_sha256": "a9e4a9fedf3f151e2c37f04fabd07c1ac19e8e61638f8c5c7b4d7e6926b99df0",
+      "expected_k": [
+        0,
+        0,
+        1,
+        1,
+        1,
+        2,
+        0,
+        1
+      ]
+    },
+    {
+      "station": "WIC",
+      "date": "2023-12-24",
+      "k9_nT": 500,
+      "image": "wic_20231224.jpg",
+      "image_sha256": "3ec7a9a30adef002255ad0ffbbf36ed7208c3ebf3225ebc39854527940ade2e9",
+      "expected_k": [
+        3,
+        2,
+        2,
+        2,
+        2,
+        1,
+        1,
+        1
+      ]
+    },
+    {
+      "station": "WIC",
+      "date": "2023-12-25",
+      "k9_nT": 500,
+      "image": "wic_20231225.jpg",
+      "image_sha256": "3b9496fb1cbc06f695cc5f9140dba8679c227e3cd805b9845b047f33c8daa762",
+      "expected_k": [
+        0,
+        1,
+        0,
+        0,
+        0,
+        0,
+        1,
+        0
+      ]
+    },
+    {
+      "station": "WIC",
+      "date": "2023-12-26",
+      "k9_nT": 500,
+      "image": "wic_20231226.jpg",
+      "image_sha256": "50999c058939e8338d89ef59e4d2b3d07bbc8349055146283799b800e20f1578",
+      "expected_k": [
+        0,
+        1,
+        1,
+        1,
+        1,
+        1,
+        0,
+        0
+      ]
+    },
+    {
+      "station": "WIC",
+      "date": "2023-12-27",
+      "k9_nT": 500,
+      "image": "wic_20231227.jpg",
+      "image_sha256": "82a33b71f35fd0ea47135407cc2f6703a39e5914ba197344d2ee5cc97640c63d",
+      "expected_k": [
+        1,
+        1,
+        1,
+        1,
+        1,
+        0,
+        1,
+        0
+      ]
+    },
+    {
+      "station": "WIC",
+      "date": "2023-12-28",
+      "k9_nT": 500,
+      "image": "wic_20231228.jpg",
+      "image_sha256": "84defa6c2cb2496fba5006f2490408c5143fdceaca699d6360c9fd25764a3a33",
+      "expected_k": [
+        0,
+        0,
+        0,
+        0,
+        0,
+        0,
+        0,
+        2
+      ]
+    },
+    {
+      "station": "WIC",
+      "date": "2023-12-29",
+      "k9_nT": 500,
+      "image": "wic_20231229.jpg",
+      "image_sha256": "3dd615b121df8573763211d851e6b692fa36c5db199c4e8cba81349a9d1ab9a5",
+      "expected_k": [
+        1,
+        0,
+        1,
+        2,
+        1,
+        0,
+        2,
+        2
+      ]
+    },
+    {
+      "station": "WIC",
+      "date": "2023-12-30",
+      "k9_nT": 500,
+      "image": "wic_20231230.jpg",
+      "image_sha256": "36b9bf530bab0632db5d2d9a2899e65ab7005fd23bb7b1010e7ec2f8ce02f7d4",
+      "expected_k": [
+        1,
+        2,
+        1,
+        1,
+        1,
+        1,
+        0,
+        0
+      ]
+    },
+    {
+      "station": "WIC",
+      "date": "2024-05-08",
+      "k9_nT": 500,
+      "image": "wic_20240508.jpg",
+      "image_sha256": "720ac04161d09698e1074b0ecbc9915e2acd54e4a88be9842a47e4f742d43b32",
+      "expected_k": [
+        0,
+        2,
+        2,
+        2,
+        2,
+        2,
+        0,
+        1
+      ]
+    },
+    {
+      "station": "WIC",
+      "date": "2024-05-09",
+      "k9_nT": 500,
+      "image": "wic_20240509.jpg",
+      "image_sha256": "80c2f3154e800ab74bef27ab83ccb5f1c5df973ce81672590bf399a86f210151",
+      "expected_k": [
+        0,
+        1,
+        1,
+        2,
+        1,
+        1,
+        2,
+        2
+      ]
+    },
+    {
+      "station": "WIC",
+      "date": "2024-05-10",
+      "k9_nT": 500,
+      "image": "wic_20240510.jpg",
+      "image_sha256": "72ef5262ae95fda62c1223f8561084dfe9405703abb875ecaedf3e60bc7972dc",
+      "expected_k": [
+        3,
+        2,
+        2,
+        1,
+        2,
+        7,
+        7,
+        8
+      ]
+    },
+    {
+      "station": "WIC",
+      "date": "2024-05-11",
+      "k9_nT": 500,
+      "image": "wic_20240511.jpg",
+      "image_sha256": "ad7b7e1e8dc0a5c6d7bd7b1df66523ed0d0c45f908a73c6e9fe1019227e33a7e",
+      "expected_k": [
+        7,
+        6,
+        7,
+        8,
+        7,
+        6,
+        7,
+        6
+      ]
+    },
+    {
+      "station": "WIC",
+      "date": "2024-05-12",
+      "k9_nT": 500,
+      "image": "wic_20240512.jpg",
+      "image_sha256": "069c00f612fed0726a2e191473ace33f370c64e3fc1a3ddfebdf570988590c9a",
+      "expected_k": [
+        5,
+        5,
+        3,
+        4,
+        2,
+        2,
+        4,
+        5
+      ]
+    },
+    {
+      "station": "WIC",
+      "date": "2024-05-13",
+      "k9_nT": 500,
+      "image": "wic_20240513.jpg",
+      "image_sha256": "b628af3eafe136e5008be195649edc9f89ee1b2cfaf0e87001afdc8eb7236df9",
+      "expected_k": [
+        4,
+        4,
+        2,
+        3,
+        3,
+        3,
+        2,
+        2
+      ]
+    },
+    {
+      "station": "WIC",
+      "date": "2024-05-14",
+      "k9_nT": 500,
+      "image": "wic_20240514.jpg",
+      "image_sha256": "8cb6455beedc93d3418cd4c8f97df72a63e21340d4ecf39fc2391b5bd479e128",
+      "expected_k": [
+        1,
+        1,
+        1,
+        2,
+        2,
+        2,
+        2,
+        0
+      ]
+    },
+    {
+      "station": "WIC",
+      "date": "2024-05-15",
+      "k9_nT": 500,
+      "image": "wic_20240515.jpg",
+      "image_sha256": "1fca580dde7d3d33225a7115b4e99b934925047c917606f5515600b15b96e935",
+      "expected_k": [
+        1,
+        2,
+        2,
+        2,
+        2,
+        2,
+        2,
+        3
+      ]
+    }
+  ]
+}

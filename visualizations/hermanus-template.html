@@ -1,0 +1,71 @@
+<!doctype html>
+<html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">
+<title>Inside Hermanus LRNS</title>
+<style>
+:root{color-scheme:light;--ink:#243348;--muted:#657588;--line:#e3e9f0;--quiet:#13a88a;--forward:#537be0;--reverse:#b668cc;--average:#df9c30;--residual:#cc5562}
+*{box-sizing:border-box}body{margin:0;background:#f5f7fa;color:var(--ink);font:16px/1.55 system-ui,-apple-system,sans-serif}main{max-width:1180px;margin:auto;padding:40px 24px}h1{font-size:clamp(27px,4vw,40px);letter-spacing:-1px;margin:4px 0 10px;line-height:1.2}h2{font-size:19px;line-height:1.4;margin:0 0 4px}p{margin:6px 0 14px}.eyebrow{font-size:12px;letter-spacing:1.6px;font-weight:700;color:var(--quiet)}.muted,small{color:var(--muted)}.intro{max-width:850px}.flow{display:flex;gap:9px;align-items:center;flex-wrap:wrap;margin:24px 0}.flow span{background:white;border:1px solid var(--line);padding:9px 13px;border-radius:9px;font-size:14px;font-weight:600}.flow b{color:#99a8b7}.controls{display:flex;gap:28px;flex-wrap:wrap;align-items:center;padding:18px 22px;background:#eaf0f7;border-radius:12px;margin-bottom:20px}.controls label{font-size:14px;font-weight:600}select{margin-left:8px;background:white;color:var(--ink);border:1px solid #c6d1df;border-radius:7px;padding:8px;font:inherit}button{cursor:pointer;border:1px solid #c6d1df;background:white;border-radius:7px;color:var(--ink);padding:7px 14px;font:inherit}button:hover{background:#f0f4f9}button:focus-visible,input:focus-visible,select:focus-visible{outline:3px solid #82a9f2;outline-offset:3px}.card{background:white;border:1px solid var(--line);border-radius:14px;padding:22px 24px;margin-bottom:18px;overflow:hidden}.legend{font-size:13px;display:flex;flex-wrap:wrap;gap:18px}.legend span:before{content:'';display:inline-block;width:18px;height:3px;background:var(--c);margin-right:7px;vertical-align:middle}.plot{display:block;width:100%;height:auto;margin-top:8px}.step{background:#f7f9fc;border:1px solid var(--line);border-radius:10px;padding:16px 18px;margin-top:12px}.scrub{display:flex;align-items:center;gap:14px;margin:8px 0 14px}.scrub input{flex:1;min-width:60px;accent-color:var(--forward)}.clock{font-variant-numeric:tabular-nums;font-weight:700;white-space:nowrap}.metrics{display:grid;grid-template-columns:repeat(4,1fr);gap:12px}.metric small{display:block}.metric strong{font-size:20px;font-variant-numeric:tabular-nums}.equation{font-family:ui-monospace,monospace;font-size:13px;background:#edf2f8;padding:10px 12px;border-radius:6px;margin-top:12px}.note{font-size:13px;color:var(--muted);max-width:950px}.kgrid{display:grid;grid-template-columns:repeat(8,1fr);gap:10px;margin-top:18px}.kcell{text-align:center;background:#f4f7fb;padding:12px 3px;border-radius:8px}.kcell strong{display:block;font-size:27px;color:#405673}.kcell small{display:block;font-size:12px}.footer{margin:25px 0;font-size:13px;color:var(--muted)}a{color:#3561a3}svg text{font-family:system-ui,sans-serif;font-size:12px;fill:var(--muted)}.inspect{stroke:#8393a8;stroke-dasharray:4 4;pointer-events:none}
+@media(max-width:650px){main{padding:24px 12px}.card{padding:18px 12px}.metrics{grid-template-columns:repeat(2,1fr)}.kgrid{grid-template-columns:repeat(4,1fr)}.controls{gap:14px}.plot text{font-size:14px}}
+</style></head>
+<body><main>
+<div class="eyebrow">GEOMAGNETIC K INDICES · INTERACTIVE EXPLAINER</div>
+<h1>Inside Hermanus LRNS</h1>
+<p class="intro">The filter builds an estimate of the regular daily variation, then subtracts it to reveal magnetic disturbances. Explore the actual calculation for <strong>Kiruna, 1 December 2023</strong>, using 1,440 minute means.</p>
+<div class="flow" aria-label="Algorithm stages"><span>Center the day</span><b>→</b><span>L1 robust rough fit</span><b>→</b><span>L2 refinement</span><b>→</b><span>Subtract quiet curve</span><b>→</b><span>3-hour ranges → K</span></div>
+<div class="controls"><label>Component<select id="component"><option value="x">X · northward</option><option value="y">Y · eastward</option></select></label><label>Adaptation μ<select id="mu"><option value="0.08">0.08 · slower response</option><option value="0.17" selected>0.17 · example default</option><option value="0.20">0.20 · faster response</option></select></label><small>q-index M · window 300–1009 · K9 1500 nT · seed 1</small></div>
+<section class="card"><h2>1. Separate the daily pattern from the observations</h2><p class="muted">The daily mean is removed from the measurements. The green line is the final quiet curve after both L1 and L2 stages.</p><div class="legend"><span style="--c:#a4b1c2">Centered measurement</span><span style="--c:#13a88a">Final quiet curve</span></div><svg class="plot" id="observed" viewBox="0 0 1100 250" role="img" aria-label="Measured field and final quiet curve over 24 hours"></svg><p class="note">The pale green region marks the assumed daytime window. The filter adapts more slowly outside it.</p></section>
+<section class="card"><h2>2. Watch the first L1 pass build an estimate</h2><p class="muted">The forward filter starts near zero because the data has been centered. It moves by small steps according to the sign of the error. The reverse filter traverses the day backward; averaging the two reduces the time shift.</p><div class="legend"><span style="--c:#537be0">Forward →</span><span style="--c:#b668cc">Backward ←</span><span style="--c:#df9c30">First-pass average</span></div><svg class="plot" id="rough" viewBox="0 0 1100 250" role="img" aria-label="First L1 forward, backward, and averaged curves"></svg>
+<div class="step"><div class="scrub"><button id="play" type="button">Play</button><label for="minute" class="muted">Inspect minute</label><input id="minute" type="range" min="0" max="1439" value="0"><output id="clock" class="clock" for="minute">00:00 UT</output></div><div class="metrics" aria-live="polite"><div class="metric"><small>Centered measurement</small><strong id="measurement"></strong></div><div class="metric"><small>Forward estimate</small><strong id="estimate"></strong></div><div class="metric"><small>Error</small><strong id="error"></strong></div><div class="metric"><small>Next weight w</small><strong id="next"></strong></div></div><div class="equation" id="update"></div><p class="note" id="stepnote"></p></div>
+<p class="note">This plot shows only the first rough L1 cascade. The algorithm then performs another L1 cascade and two L2 cascades to produce the final green curve above. L1 updates depend on error direction; L2 updates depend on error size. Very quiet data can skip L1 entirely.</p></section>
+<section class="card"><h2>3. Subtract the final quiet curve</h2><p class="muted">Residual = centered measurement − final quiet curve. Within each fixed three-hour interval, its maximum minus minimum gives the component disturbance range.</p><svg class="plot" id="residual" viewBox="0 0 1100 230" role="img" aria-label="Residual disturbance after subtraction of the final quiet curve"></svg><p class="note" id="rangeinfo"></p></section>
+<section class="card"><h2>4. Classify the ranges and keep the larger component K</h2><p class="muted">Each X and Y range is classified with Kiruna’s K9-based thresholds. Combined K = max(K<sub>X</sub>, K<sub>Y</sub>).</p><div class="kgrid" id="kgrid"></div><p class="note" id="thresholds"></p></section>
+<p class="footer">The example quiet-day settings originate from the supplied Hermanus reference and need calibration for Kiruna. The displayed K values are estimates, not an independent validation against hand-scaled indices. Changing μ updates actual precomputed filter results, not a cosmetic smoothing approximation.<br><a href="hermanus.png">Download PNG</a> · <a href="hermanus.svg">Download SVG</a> · <a href="../vendor/hermanus/README.md">Source and reference notes</a>. This page works offline and sends no data.</p>
+</main>
+<script>
+const DATA=__DATA__;
+const C={raw:'#a4b1c2',quiet:'#13a88a',forward:'#537be0',reverse:'#b668cc',average:'#df9c30',residual:'#cc5562'};
+const $=id=>document.getElementById(id), NS='http://www.w3.org/2000/svg';
+let component='x',mu='0.17',timer=null;
+const f32=Math.fround;
+function el(tag,attrs={},text=''){const n=document.createElementNS(NS,tag);for(const [k,v]of Object.entries(attrs))n.setAttribute(k,v);if(text)n.textContent=text;return n}
+function current(){return DATA.mu[mu][component]}
+function plot(id,series,shade=false){
+ const svg=$(id), H=id==='residual'?230:250,W=1100,L=65,R=18,T=15,B=30;
+ svg.replaceChildren();
+ let low=0,high=0;for(const [key] of series){for(const v of current()[key]){low=Math.min(low,v);high=Math.max(high,v)}}
+ const pad=Math.max((high-low)*.1,1);low-=pad;high+=pad;
+ const x=t=>L+t/24*(W-L-R),y=v=>H-B-(v-low)/(high-low)*(H-B-T);
+ if(shade)svg.append(el('rect',{x:x(5),y:T,width:x(16.8)-x(5),height:H-T-B,fill:C.quiet,opacity:.055}));
+ for(let i=0;i<=4;i++){const v=low+(high-low)*i/4,yy=y(v);svg.append(el('line',{x1:L,x2:W-R,y1:yy,y2:yy,stroke:'#edf1f5'}));svg.append(el('text',{x:L-8,y:yy+4,'text-anchor':'end'},v.toFixed(0)))}
+ for(let h=0;h<=24;h+=3){svg.append(el('line',{x1:x(h),x2:x(h),y1:T,y2:H-B,stroke:'#e6ebf1'}));svg.append(el('text',{x:x(h),y:H-8,'text-anchor':'middle'},String(h).padStart(2,'0')))}
+ svg.append(el('text',{x:5,y:15},'nT'));
+ for(const [key,color,width=1.4,opacity=1]of series){const values=current()[key];let path='';for(let i=0;i<1440;i++)path+=(i?'L':'M')+x(i/60).toFixed(2)+','+y(values[i]).toFixed(2);svg.append(el('path',{d:path,fill:'none',stroke:color,'stroke-width':width,opacity,'stroke-linejoin':'round'}))}
+ svg.append(el('line',{class:'inspect',x1:L,x2:L,y1:T,y2:H-B}));
+ svg.onpointermove=event=>{const box=svg.getBoundingClientRect(),px=(event.clientX-box.left)/box.width*W;const minute=Math.max(0,Math.min(1439,Math.round((px-L)/(W-L-R)*1440)));$('minute').value=minute;inspect()};
+}
+function inspect(){
+ const i=+$('minute').value,trace=current(),hh=Math.floor(i/60),mm=i%60;
+ $('clock').textContent=String(hh).padStart(2,'0')+':'+String(mm).padStart(2,'0')+' UT';
+ const estimate=trace.forward[i],measurement=trace.raw[i],error=f32(measurement-estimate),sign=Math.abs(error)<f32(.001)?0:error>0?1:-1;
+ const number=v=>(v>=0?'+':'')+v.toFixed(3)+' nT';
+ $('measurement').textContent=number(measurement);$('estimate').textContent=number(estimate);$('error').textContent=number(error);$('next').textContent=number(trace.nextWeights[i]);
+ $('update').textContent='w(next) = '+trace.weights[i].toFixed(5)+' + '+trace.steps[i].toFixed(5)+' × '+sign+' × '+trace.guide[i].toFixed(5)+' = '+trace.nextWeights[i].toFixed(5);
+ $('stepnote').textContent=(i===0?'Initial weight: mean of the centered day, approximately zero. ':'')+(sign===0?'The error is inside the 0.001 nT deadband; no adjustment is made.':sign>0?'Measurement is above the estimate: increase the weight.':'Measurement is below the estimate: decrease the weight.')+' The internal guide is near 1; no random noise is added to the observed field.';
+ for(const svg of document.querySelectorAll('.plot')){const line=svg.querySelector('.inspect');if(line){const x=65+(i/60)/24*(1100-65-18);line.setAttribute('x1',x);line.setAttribute('x2',x)}}
+ const interval=Math.floor(i/180),start=interval*3,end=start+3;
+ $('rangeinfo').textContent='Selected interval '+String(start).padStart(2,'0')+'–'+String(end).padStart(2,'0')+' UT: '+component.toUpperCase()+' range '+trace.ranges[interval].toFixed(2)+' nT → component K '+trace.k[interval]+'.';
+ for(const [j,cell]of [...$('kgrid').children].entries())cell.style.outline=j===interval?'2px solid #537be0':'none';
+}
+function draw(){
+ component=$('component').value;mu=$('mu').value;
+ plot('observed',[['raw',C.raw,.9],['quiet',C.quiet,2]],true);
+ plot('rough',[['raw',C.raw,.6,.25],['forward',C.forward],['reverse',C.reverse],['average',C.average,2]]);
+ plot('residual',[['residual',C.residual,1.1]]);
+ $('kgrid').replaceChildren();const result=DATA.mu[mu];
+ for(let i=0;i<8;i++){const cell=document.createElement('div');cell.className='kcell';const time=document.createElement('small');time.textContent=String(i*3).padStart(2,'0')+'–'+String(i*3+3).padStart(2,'0')+' UT';const k=document.createElement('strong');k.textContent=result.k[i];const parts=document.createElement('small');parts.textContent='X '+result.x.k[i]+' / Y '+result.y.k[i];cell.append(time,k,parts);$('kgrid').append(cell)}
+ $('thresholds').textContent='K9 = '+DATA.k9+' nT. Range thresholds: '+[.01,.02,.04,.08,.14,.24,.4,.66,1].map(v=>Math.round(v*DATA.k9)).join(', ')+' nT. Quiet-data shortcut reference amplitude = '+DATA.qfactor+' nT.';
+ inspect();
+}
+$('component').onchange=draw;$('mu').onchange=draw;$('minute').oninput=inspect;
+$('play').onclick=()=>{if(timer){clearInterval(timer);timer=null;$('play').textContent='Play'}else{$('play').textContent='Pause';timer=setInterval(()=>{$('minute').value=(+$('minute').value+3)%1440;inspect()},80)}};
+draw();
+</script></body></html>
